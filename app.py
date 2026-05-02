@@ -23,15 +23,23 @@ def _get_agent():
 
 @app.route("/")
 def index():
-    from jarvis.config import ANTHROPIC_API_KEY
-    return render_template("index.html", api_key_set=bool(ANTHROPIC_API_KEY))
+    from jarvis.config import ANTHROPIC_API_KEY, GROQ_API_KEY
+    api_key_set = bool(ANTHROPIC_API_KEY) or bool(GROQ_API_KEY)
+    return render_template("index.html", api_key_set=api_key_set)
 
 
 @app.route("/api/status")
 def api_status():
-    from jarvis.config import ANTHROPIC_API_KEY
+    from jarvis.config import ANTHROPIC_API_KEY, GROQ_API_KEY, PROVIDER, CLAUDE_MODEL, GROQ_MODEL
     from jarvis.tools import get_current_time
-    return jsonify({"api_key_set": bool(ANTHROPIC_API_KEY), "time": get_current_time()})
+    api_key_set = bool(ANTHROPIC_API_KEY) or bool(GROQ_API_KEY)
+    model = GROQ_MODEL if PROVIDER == "groq" else CLAUDE_MODEL
+    return jsonify({
+        "api_key_set": api_key_set,
+        "provider": PROVIDER,
+        "model": model,
+        "time": get_current_time(),
+    })
 
 
 @app.route("/api/chat", methods=["POST"])

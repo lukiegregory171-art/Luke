@@ -76,6 +76,15 @@ body {
 .setup-steps code { color: var(--cyan); font-family: var(--mono); font-size: .85em; }
 .setup-hint { font-size: .85rem; color: var(--text-dim); }
 .setup-hint a { color: var(--cyan); }
+.setup-link {
+  display: inline-block; padding: .4rem 1rem;
+  border: 1px solid var(--border); border-radius: 4px;
+  color: var(--cyan); font-size: .82rem; text-decoration: none;
+  transition: all .2s;
+}
+.setup-link:hover { border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
+.setup-link.free { border-color: rgba(0,255,136,.4); color: var(--green); }
+.setup-link.free:hover { border-color: var(--green); box-shadow: 0 0 8px rgba(0,255,136,.3); }
 
 /* ── App shell ────────────────────────────────────────────────────────────── */
 .app {

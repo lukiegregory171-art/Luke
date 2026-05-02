@@ -350,5 +350,16 @@ function escHtml(s) {
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
-input.focus();
-loadVoice();
+async function init() {
+  input.focus();
+  loadVoice();
+  try {
+    const data = await fetch('/api/status').then(r => r.json());
+    const providerEl = $('provider-label');
+    if (providerEl && data.provider) {
+      providerEl.textContent = data.provider === 'groq' ? 'GROQ (FREE)' : 'CLAUDE';
+      providerEl.style.color = data.provider === 'groq' ? 'var(--green)' : 'var(--cyan)';
+    }
+  } catch (_) {}
+}
+init();

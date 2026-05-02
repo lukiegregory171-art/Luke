@@ -18,10 +18,15 @@
     <p class="setup-title">API KEY REQUIRED</p>
     <div class="setup-steps">
       <p>1. Copy <code>.env.example</code> → <code>.env</code></p>
-      <p>2. Set <code>ANTHROPIC_API_KEY=sk-ant-...</code></p>
+      <p>2. Add one of the following:</p>
+      <p>&nbsp;&nbsp;<code>GROQ_API_KEY=gsk_...</code> &nbsp;<span style="color:#00ff88">← FREE</span></p>
+      <p>&nbsp;&nbsp;<code>ANTHROPIC_API_KEY=sk-ant-...</code> &nbsp;<span style="color:#ffaa00">← paid</span></p>
       <p>3. Run <code>python app.py</code> again</p>
     </div>
-    <p class="setup-hint">Don't have a key? <a href="https://console.anthropic.com" target="_blank">console.anthropic.com →</a></p>
+    <div style="display:flex;gap:.8rem;justify-content:center;margin-top:.8rem">
+      <a href="https://console.groq.com" target="_blank" class="setup-link free">Groq (Free) →</a>
+      <a href="https://console.anthropic.com" target="_blank" class="setup-link">Claude →</a>
+    </div>
   </div>
 </div>
 {% endif %}
@@ -41,6 +46,10 @@
       <div class="hud-block">
         <span class="hud-label">TIME</span>
         <span class="hud-value" id="clock">--:--:--</span>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">ENGINE</span>
+        <span class="hud-value" id="provider-label">--</span>
       </div>
       <div class="hud-block">
         <span class="hud-label">STATUS</span>

@@ -1,12 +1,13 @@
 import json
-from typing import Callable, List, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
-import anthropic
-
-from .config import ANTHROPIC_API_KEY, USER_NAME, MODEL, MAX_HISTORY
+from .config import (
+    ANTHROPIC_API_KEY, GROQ_API_KEY, PROVIDER,
+    CLAUDE_MODEL, GROQ_MODEL, USER_NAME, MAX_HISTORY,
+)
 from .tools import execute_tool
 
-# ── Tool schemas ──────────────────────────────────────────────────────────────
+# ── Shared tool definitions (Anthropic format) ────────────────────────────────
 
 TOOLS = [
     {
@@ -19,9 +20,7 @@ TOOLS = [
         "description": "Get calendar events for a specific date (defaults to today if omitted).",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "date": {"type": "string", "description": "YYYY-MM-DD. Omit for today."}
-            },
+            "properties": {"date": {"type": "string", "description": "YYYY-MM-DD. Omit for today."}},
         },
     },
     {
@@ -29,9 +28,7 @@ TOOLS = [
         "description": "Get all calendar events over the next N days.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "days": {"type": "integer", "description": "How many days ahead to look (default 7)."}
-            },
+            "properties": {"days": {"type": "integer", "description": "Days ahead to look (default 7)."}},
         },
     },
     {
@@ -63,9 +60,7 @@ TOOLS = [
         "description": "Get all active (incomplete) reminders.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "include_completed": {"type": "boolean", "description": "Also return completed reminders."}
-            },
+            "properties": {"include_completed": {"type": "boolean"}},
         },
     },
     {
@@ -74,9 +69,9 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "text":      {"type": "string", "description": "What to be reminded about."},
-                "remind_at": {"type": "string", "description": "When — e.g. '2026-05-03 09:00' or 'tomorrow morning'."},
-                "repeat":    {"type": "string", "description": "Optional repeat: daily, weekly, etc."},
+                "text":      {"type": "string"},
+                "remind_at": {"type": "string", "description": "When — e.g. '2026-05-03 09:00'"},
+                "repeat":    {"type": "string", "description": "daily, weekly, etc."},
             },
             "required": ["text", "remind_at"],
         },
@@ -92,12 +87,12 @@ TOOLS = [
     },
     {
         "name": "get_system_info",
-        "description": "Get OS, memory, and disk information for this machine.",
+        "description": "Get OS, memory, and disk information.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "search_web",
-        "description": "Search the web via DuckDuckGo for up-to-date information.",
+        "description": "Search the web via DuckDuckGo.",
         "input_schema": {
             "type": "object",
             "properties": {"query": {"type": "string"}},
@@ -109,9 +104,7 @@ TOOLS = [
         "description": "List files and folders in a directory.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "directory": {"type": "string", "description": "Path (default: current directory)."}
-            },
+            "properties": {"directory": {"type": "string", "description": "Path (default: .)"}},
         },
     },
     {
@@ -125,22 +118,17 @@ TOOLS = [
     },
     {
         "name": "run_command",
-        "description": "Run a shell command on the system and return its output.",
+        "description": "Run a shell command and return its output.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "command":   {"type": "string", "description": "The shell command to execute."},
-                "safe_mode": {
-                    "type": "boolean",
-                    "description": "Restrict to safe read-only commands (default true).",
-                },
+                "command":   {"type": "string"},
+                "safe_mode": {"type": "boolean", "description": "Restrict to safe commands (default true)."},
             },
             "required": ["command"],
         },
     },
 ]
-
-# ── System prompt ─────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = f"""You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), a highly advanced \
 personal AI assistant. You speak with refined, professional British wit and always address the user as \
@@ -150,50 +138,62 @@ Personality:
 - Calm, precise, slightly dry sense of humour
 - Proactive — if you notice something relevant, mention it
 - Concise in normal conversation; thorough when giving instructions
-- Never say "I cannot" unless truly impossible — find a way
 
 Capabilities you must use actively:
 - When asked about today's schedule, ALWAYS call get_calendar_events
 - When asked a factual question you are uncertain about, call search_web
 - When asked about system info, call get_system_info
-- For step-by-step how-to questions (e.g. "how do I open a terminal in Claude Code"), \
-  answer directly from your knowledge with numbered steps — no need to search
+- Answer how-to questions directly from your knowledge with numbered steps
 
 Keep responses tight. Use plain prose, not bullet-heavy walls of text, unless listing steps or items.
 """
 
 
-# ── Agent ─────────────────────────────────────────────────────────────────────
+# ── Helper: convert to OpenAI/Groq tool format ────────────────────────────────
 
-class JarvisAgent:
+def _to_openai_tools(tools: List[Dict]) -> List[Dict]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
+        }
+        for t in tools
+    ]
+
+
+# ── Claude backend ────────────────────────────────────────────────────────────
+
+class _ClaudeBackend:
     def __init__(self) -> None:
         if not ANTHROPIC_API_KEY:
             raise ValueError(
-                "ANTHROPIC_API_KEY is not set. "
-                "Add it to a .env file (copy .env.example) or export it as an environment variable."
+                "ANTHROPIC_API_KEY is not set.\n"
+                "Add it to your .env file or switch to PROVIDER=groq for a free key."
             )
+        import anthropic
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         self.history: List[Dict] = []
 
-    def chat(self, user_message: str, on_token: Optional[Callable[[str], None]] = None) -> str:
+    def chat(self, user_message: str, on_token: Optional[Callable] = None) -> str:
         self.history.append({"role": "user", "content": user_message})
         if len(self.history) > MAX_HISTORY * 2:
             self.history = self.history[-(MAX_HISTORY * 2):]
 
         final_text = ""
-
         while True:
             response = self.client.messages.create(
-                model=MODEL,
+                model=CLAUDE_MODEL,
                 max_tokens=2048,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
                 messages=self.history,
             )
 
-            text_parts: List[str] = []
-            tool_uses = []
-
+            text_parts, tool_uses = [], []
             for block in response.content:
                 if block.type == "text":
                     text_parts.append(block.text)
@@ -205,13 +205,11 @@ class JarvisAgent:
             if text_parts:
                 final_text = " ".join(text_parts)
 
-            # Append the assistant turn to history (raw content blocks)
             self.history.append({"role": "assistant", "content": response.content})
 
             if not tool_uses or response.stop_reason == "end_turn":
                 break
 
-            # Execute tools and feed results back
             tool_results = [
                 {
                     "type": "tool_result",
@@ -226,3 +224,93 @@ class JarvisAgent:
 
     def clear(self) -> None:
         self.history = []
+
+
+# ── Groq backend ──────────────────────────────────────────────────────────────
+
+class _GroqBackend:
+    def __init__(self) -> None:
+        if not GROQ_API_KEY:
+            raise ValueError(
+                "GROQ_API_KEY is not set.\n"
+                "Get a free key at console.groq.com and add GROQ_API_KEY=... to your .env file."
+            )
+        from groq import Groq
+        self.client = Groq(api_key=GROQ_API_KEY)
+        self.history: List[Dict] = []
+        self._tools = _to_openai_tools(TOOLS)
+
+    def chat(self, user_message: str, on_token: Optional[Callable] = None) -> str:
+        self.history.append({"role": "user", "content": user_message})
+        if len(self.history) > MAX_HISTORY * 2:
+            self.history = self.history[-(MAX_HISTORY * 2):]
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + self.history
+
+        while True:
+            response = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=messages,
+                tools=self._tools,
+                tool_choice="auto",
+                max_tokens=2048,
+            )
+
+            msg = response.choices[0].message
+
+            # Build serialisable assistant dict for history
+            assistant_entry: Dict = {"role": "assistant", "content": msg.content or ""}
+            if msg.tool_calls:
+                assistant_entry["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in msg.tool_calls
+                ]
+            messages.append(assistant_entry)
+            self.history.append(assistant_entry)
+
+            if not msg.tool_calls:
+                return msg.content or ""
+
+            # Execute tools and add results
+            for tc in msg.tool_calls:
+                try:
+                    args = json.loads(tc.function.arguments)
+                except Exception:
+                    args = {}
+                result = execute_tool(tc.function.name, args)
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(result, default=str),
+                }
+                messages.append(tool_msg)
+                self.history.append(tool_msg)
+
+    def clear(self) -> None:
+        self.history = []
+
+
+# ── Public interface ───────────────────────────────────────────────────────────
+
+class JarvisAgent:
+    """Thin wrapper — delegates to Claude or Groq backend based on PROVIDER setting."""
+
+    def __init__(self) -> None:
+        if PROVIDER == "groq":
+            self._backend = _GroqBackend()
+            self.provider = "groq"
+            self.model = GROQ_MODEL
+        else:
+            self._backend = _ClaudeBackend()
+            self.provider = "claude"
+            self.model = CLAUDE_MODEL
+
+    def chat(self, user_message: str, on_token: Optional[Callable] = None) -> str:
+        return self._backend.chat(user_message, on_token)
+
+    def clear(self) -> None:
+        self._backend.clear()
