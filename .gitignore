@@ -1,8 +1,15 @@
 __pycache__/
 *.pyc
 *.pyo
-.env
+*.pyd
+*.db
 data/
+*.log
+.env
 *.egg-info/
 .venv/
 venv/
+*.mp3
+*.wav
+dist/
+build/

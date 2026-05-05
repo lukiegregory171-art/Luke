@@ -1,8 +1,9 @@
-anthropic>=0.40.0
-groq>=1.2.0
-flask>=3.0.0
-python-dotenv>=1.0.0
-rich>=13.0.0
-pyttsx3>=2.90
-SpeechRecognition>=3.10.0
-requests>=2.31.0
+faster-whisper
+edge-tts
+sounddevice
+numpy
+pygame
+requests
+pywin32
+python-dateutil
+pyttsx3
