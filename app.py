@@ -28,6 +28,103 @@ def index():
     return render_template("index.html", api_key_set=api_key_set)
 
 
+@app.route("/life")
+def life_page():
+    return render_template("life.html")
+
+
+@app.route("/sw.js")
+def service_worker():
+    resp = app.send_static_file("js/sw.js")
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
+
+
+@app.route("/api/life")
+def api_life():
+    from jarvis import life
+    return jsonify(life.get_life_overview())
+
+
+@app.route("/api/life/routine", methods=["POST"])
+def api_add_routine():
+    from jarvis import life
+    d = request.get_json(silent=True) or {}
+    if not (d.get("title") or "").strip():
+        return jsonify({"error": "Title required"}), 400
+    return jsonify(life.add_routine(d["title"].strip(), d.get("icon") or "✦", d.get("time_of_day") or "anytime"))
+
+
+@app.route("/api/life/routine/<rid>/check", methods=["POST"])
+def api_check_routine(rid):
+    from jarvis import life
+    return jsonify(life.check_routine(rid))
+
+
+@app.route("/api/life/routine/<rid>", methods=["DELETE"])
+def api_delete_routine(rid):
+    from jarvis import life
+    return jsonify(life.delete_routine(rid))
+
+
+@app.route("/api/life/task", methods=["POST"])
+def api_add_task():
+    from jarvis import life
+    d = request.get_json(silent=True) or {}
+    if not (d.get("title") or "").strip():
+        return jsonify({"error": "Title required"}), 400
+    return jsonify(life.add_task(d["title"].strip(), d.get("priority") or "medium", d.get("due") or None))
+
+
+@app.route("/api/life/task/<tid>/toggle", methods=["POST"])
+def api_toggle_task(tid):
+    from jarvis import life
+    return jsonify(life.complete_task(tid))
+
+
+@app.route("/api/life/task/<tid>", methods=["DELETE"])
+def api_delete_task(tid):
+    from jarvis import life
+    return jsonify(life.delete_task(tid))
+
+
+@app.route("/api/life/goal", methods=["POST"])
+def api_add_goal():
+    from jarvis import life
+    d = request.get_json(silent=True) or {}
+    if not (d.get("title") or "").strip():
+        return jsonify({"error": "Title required"}), 400
+    return jsonify(life.add_goal(d["title"].strip(), d.get("why") or "", d.get("target_date") or None))
+
+
+@app.route("/api/life/goal/<gid>/progress", methods=["POST"])
+def api_goal_progress(gid):
+    from jarvis import life
+    d = request.get_json(silent=True) or {}
+    return jsonify(life.set_goal_progress(gid, int(d.get("progress", 0))))
+
+
+@app.route("/api/life/goal/<gid>/milestone", methods=["POST"])
+def api_add_milestone(gid):
+    from jarvis import life
+    d = request.get_json(silent=True) or {}
+    if not (d.get("title") or "").strip():
+        return jsonify({"error": "Title required"}), 400
+    return jsonify(life.add_milestone(gid, d["title"].strip()))
+
+
+@app.route("/api/life/goal/<gid>/milestone/<mid>/toggle", methods=["POST"])
+def api_toggle_milestone(gid, mid):
+    from jarvis import life
+    return jsonify(life.complete_milestone(gid, mid))
+
+
+@app.route("/api/life/goal/<gid>", methods=["DELETE"])
+def api_delete_goal(gid):
+    from jarvis import life
+    return jsonify(life.delete_goal(gid))
+
+
 @app.route("/api/status")
 def api_status():
     from jarvis.config import ANTHROPIC_API_KEY, GROQ_API_KEY, PROVIDER, CLAUDE_MODEL, GROQ_MODEL

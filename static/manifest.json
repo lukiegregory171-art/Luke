@@ -1,0 +1,19 @@
+{
+  "name": "LIFE OS — J.A.R.V.I.S.",
+  "short_name": "LIFE OS",
+  "description": "Mission control for your routines, goals, and dream life — powered by your personal AI.",
+  "start_url": "/life",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#040c18",
+  "theme_color": "#040c18",
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Talk to JARVIS", "url": "/", "description": "Open the AI assistant" },
+    { "name": "Life Dashboard", "url": "/life", "description": "Routines, missions and goals" }
+  ]
+}

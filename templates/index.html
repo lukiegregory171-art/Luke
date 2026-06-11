@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>J.A.R.V.I.S.</title>
+  <meta name="theme-color" content="#040c18">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="stylesheet" href="/static/css/jarvis.css">
 </head>
 <body>
@@ -55,6 +59,7 @@
         <span class="hud-label">STATUS</span>
         <span class="hud-value status-val" id="status-label">ONLINE</span>
       </div>
+      <a class="icon-btn" href="/life" title="Life OS — routines, missions &amp; goals" style="text-decoration:none">&#x1F680;</a>
       <button class="icon-btn" id="sidebar-toggle" title="Schedule">&#x1F4C5;</button>
       <button class="icon-btn" id="voice-toggle" title="Toggle voice output">&#x1F50A;</button>
       <button class="icon-btn danger" id="clear-btn" title="Clear memory">&#x1F5D1;</button>
@@ -110,6 +115,7 @@
         </div>
 
         <div class="quick-bar">
+          <button class="q-btn" data-msg="Give me a full life overview — routines, missions and goal progress">Life OS</button>
           <button class="q-btn" data-msg="What do I have planned today?">Today</button>
           <button class="q-btn" data-msg="What reminders do I have?">Reminders</button>
           <button class="q-btn" data-msg="Search the web for the latest news in AI">AI News</button>
@@ -145,5 +151,8 @@
 </div>
 
 <script src="/static/js/jarvis.js"></script>
+<script>
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+</script>
 </body>
 </html>
