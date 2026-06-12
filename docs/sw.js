@@ -1,6 +1,6 @@
 /* LIFE OS service worker — cache everything so the app works fully offline */
 
-const CACHE = "lifeos-static-v2";
+const CACHE = "lifeos-static-v3";
 const SHELL = [
   "./",
   "index.html",
