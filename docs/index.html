@@ -9,12 +9,15 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/life.css">
 </head>
 <body>
 
 <div class="bg-grid"></div>
-<div class="scanlines"></div>
+<div class="bg-glow"></div>
 
 <div class="app">
 
@@ -24,7 +27,7 @@
       <div class="logo-mark"></div>
       <div>
         <div class="logo-text">LIFE OS</div>
-        <div class="logo-sub">Mission control for your dream life</div>
+        <div class="logo-sub" id="greeting">Mission control for your dream life</div>
       </div>
     </div>
     <div class="header-right">
@@ -34,17 +37,27 @@
           <span class="rank" id="rank">Rookie</span>
         </div>
         <div class="xp-bar"><div class="xp-fill" id="xp-fill"></div></div>
-        <div class="xp-label"><span id="xp">0</span> XP · <span id="xp-next">0</span> to next</div>
+        <div class="xp-label"><span id="xp">0</span> XP · <span id="xp-next">0</span> to next level</div>
       </div>
     </div>
   </header>
 
+  <!-- QUOTE -->
+  <div class="quote-bar" id="quote-bar"></div>
+
   <!-- STATS STRIP -->
   <div class="stats-strip">
+    <div class="stat stat-ring">
+      <svg viewBox="0 0 44 44" class="ring">
+        <circle class="ring-bg" cx="22" cy="22" r="19"></circle>
+        <circle class="ring-val" id="ring-val" cx="22" cy="22" r="19"></circle>
+      </svg>
+      <div class="ring-center" id="stat-today">0/0</div>
+      <span class="stat-label">TODAY</span>
+    </div>
     <div class="stat"><span class="stat-icon">&#x1F525;</span><span class="stat-val" id="stat-streak">0</span><span class="stat-label">BEST STREAK</span></div>
-    <div class="stat"><span class="stat-icon">&#x2705;</span><span class="stat-val" id="stat-today">0/0</span><span class="stat-label">ROUTINES TODAY</span></div>
-    <div class="stat"><span class="stat-icon">&#x1F3AF;</span><span class="stat-val" id="stat-goals">0</span><span class="stat-label">ACTIVE GOALS</span></div>
     <div class="stat"><span class="stat-icon">&#x26A1;</span><span class="stat-val" id="stat-missions">0</span><span class="stat-label">MISSIONS DONE</span></div>
+    <div class="stat"><span class="stat-icon">&#x1F3AF;</span><span class="stat-val" id="stat-goals">0</span><span class="stat-label">ACTIVE GOALS</span></div>
   </div>
 
   <!-- PANELS -->
@@ -55,15 +68,15 @@
       <div class="panel-title"><span>&#x1F501; DAILY ROUTINES</span><span class="panel-sub" id="routines-count"></span></div>
       <div class="panel-list" id="routines-list"></div>
       <form class="add-form" id="routine-form">
-        <input type="text" id="routine-icon" class="icon-input" placeholder="✦" maxlength="2">
+        <input type="text" id="routine-icon" class="icon-input" placeholder="✦" maxlength="2" title="Emoji (optional)">
         <input type="text" id="routine-title" placeholder="New routine… e.g. Morning workout" autocomplete="off">
-        <select id="routine-time">
+        <select id="routine-time" title="Time of day">
           <option value="morning">Morning</option>
           <option value="afternoon">Afternoon</option>
           <option value="evening">Evening</option>
           <option value="anytime" selected>Anytime</option>
         </select>
-        <button type="submit">+</button>
+        <button type="submit" title="Add routine">+</button>
       </form>
     </section>
 
@@ -73,12 +86,13 @@
       <div class="panel-list" id="tasks-list"></div>
       <form class="add-form" id="task-form">
         <input type="text" id="task-title" placeholder="New mission… e.g. Book dentist" autocomplete="off">
-        <select id="task-priority">
+        <select id="task-priority" title="Priority">
           <option value="high">High</option>
           <option value="medium" selected>Med</option>
           <option value="low">Low</option>
         </select>
-        <button type="submit">+</button>
+        <input type="date" id="task-due" title="Due date (optional)">
+        <button type="submit" title="Add mission">+</button>
       </form>
     </section>
 
@@ -88,8 +102,35 @@
       <div class="panel-list" id="goals-list"></div>
       <form class="add-form" id="goal-form">
         <input type="text" id="goal-title" placeholder="New goal… e.g. Run a half marathon" autocomplete="off">
-        <button type="submit">+</button>
+        <input type="date" id="goal-date" title="Target date (optional)">
+        <button type="submit" title="Add goal">+</button>
       </form>
+    </section>
+
+    <!-- STATS -->
+    <section class="panel" id="panel-stats">
+      <div class="panel-title"><span>&#x1F4CA; PROGRESS</span><span class="panel-sub" id="stats-sub"></span></div>
+
+      <div class="stats-block">
+        <div class="block-label">LAST 8 WEEKS</div>
+        <div class="heatmap" id="heatmap"></div>
+        <div class="heatmap-legend"><span>Less</span><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><span>More</span></div>
+      </div>
+
+      <div class="stats-block">
+        <div class="block-label">ACHIEVEMENTS <span id="ach-count"></span></div>
+        <div class="achievements" id="achievements"></div>
+      </div>
+
+      <div class="stats-block">
+        <div class="block-label">YOUR DATA</div>
+        <p class="data-note">Your data lives only on this device. Back it up, or move it to another device.</p>
+        <div class="data-btns">
+          <button id="export-btn">&#x2B07; Backup</button>
+          <button id="import-btn">&#x2B06; Restore</button>
+          <input type="file" id="import-file" accept="application/json" hidden>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -99,6 +140,7 @@
     <button class="tab active" data-panel="panel-routines">&#x1F501;<span>Routines</span></button>
     <button class="tab" data-panel="panel-missions">&#x26A1;<span>Missions</span></button>
     <button class="tab" data-panel="panel-goals">&#x1F680;<span>Goals</span></button>
+    <button class="tab" data-panel="panel-stats">&#x1F4CA;<span>Progress</span></button>
   </nav>
 
 </div>
