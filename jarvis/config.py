@@ -28,3 +28,6 @@ MAX_HISTORY  = 30
 
 CALENDAR_FILE  = DATA_DIR / "calendar.json"
 REMINDERS_FILE = DATA_DIR / "reminders.json"
+ROUTINES_FILE  = DATA_DIR / "routines.json"
+TASKS_FILE     = DATA_DIR / "tasks.json"
+GOALS_FILE     = DATA_DIR / "goals.json"

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from .config import CALENDAR_FILE, REMINDERS_FILE
+from . import life
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -278,6 +279,16 @@ _DISPATCH = {
     "list_files":            lambda a: list_files(a.get("directory", ".")),
     "read_file":             lambda a: read_file(a["path"]),
     "run_command":           lambda a: run_command(a["command"], a.get("safe_mode", True)),
+    # Life OS — routines, tasks, goals
+    "get_life_overview":     lambda a: life.get_life_overview(),
+    "add_routine":           lambda a: life.add_routine(**a),
+    "check_routine":         lambda a: life.check_routine(a["routine"]),
+    "add_task":              lambda a: life.add_task(**a),
+    "complete_task":         lambda a: life.complete_task(a["task"]),
+    "add_goal":              lambda a: life.add_goal(**a),
+    "set_goal_progress":     lambda a: life.set_goal_progress(a["goal"], a["progress"]),
+    "add_milestone":         lambda a: life.add_milestone(a["goal"], a["title"]),
+    "complete_milestone":    lambda a: life.complete_milestone(a["goal"], a["milestone"]),
 }
 
 

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#040c18">
+  <title>LIFE OS</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/css/life.css">
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="scanlines"></div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-mark"></div>
+      <div>
+        <div class="logo-text">LIFE OS</div>
+        <div class="logo-sub">Mission control for your dream life</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="level-block">
+        <div class="level-top">
+          <span class="level-badge">LVL <span id="level">1</span></span>
+          <span class="rank" id="rank">Rookie</span>
+        </div>
+        <div class="xp-bar"><div class="xp-fill" id="xp-fill"></div></div>
+        <div class="xp-label"><span id="xp">0</span> XP · <span id="xp-next">0</span> to next</div>
+      </div>
+      <a class="icon-btn" href="/" title="Talk to J.A.R.V.I.S.">&#x1F916;</a>
+    </div>
+  </header>
+
+  <!-- STATS STRIP -->
+  <div class="stats-strip">
+    <div class="stat"><span class="stat-icon">&#x1F525;</span><span class="stat-val" id="stat-streak">0</span><span class="stat-label">BEST STREAK</span></div>
+    <div class="stat"><span class="stat-icon">&#x2705;</span><span class="stat-val" id="stat-today">0/0</span><span class="stat-label">ROUTINES TODAY</span></div>
+    <div class="stat"><span class="stat-icon">&#x1F3AF;</span><span class="stat-val" id="stat-goals">0</span><span class="stat-label">ACTIVE GOALS</span></div>
+    <div class="stat"><span class="stat-icon">&#x26A1;</span><span class="stat-val" id="stat-missions">0</span><span class="stat-label">MISSIONS DONE</span></div>
+  </div>
+
+  <!-- PANELS -->
+  <main class="panels">
+
+    <!-- ROUTINES -->
+    <section class="panel" id="panel-routines">
+      <div class="panel-title"><span>&#x1F501; DAILY ROUTINES</span><span class="panel-sub" id="routines-count"></span></div>
+      <div class="panel-list" id="routines-list"></div>
+      <form class="add-form" id="routine-form">
+        <input type="text" id="routine-icon" class="icon-input" placeholder="✦" maxlength="2">
+        <input type="text" id="routine-title" placeholder="New routine… e.g. Morning workout" autocomplete="off">
+        <select id="routine-time">
+          <option value="morning">Morning</option>
+          <option value="afternoon">Afternoon</option>
+          <option value="evening">Evening</option>
+          <option value="anytime" selected>Anytime</option>
+        </select>
+        <button type="submit">+</button>
+      </form>
+    </section>
+
+    <!-- MISSIONS -->
+    <section class="panel" id="panel-missions">
+      <div class="panel-title"><span>&#x26A1; MISSIONS</span><span class="panel-sub" id="tasks-count"></span></div>
+      <div class="panel-list" id="tasks-list"></div>
+      <form class="add-form" id="task-form">
+        <input type="text" id="task-title" placeholder="New mission… e.g. Book dentist" autocomplete="off">
+        <select id="task-priority">
+          <option value="high">High</option>
+          <option value="medium" selected>Med</option>
+          <option value="low">Low</option>
+        </select>
+        <button type="submit">+</button>
+      </form>
+    </section>
+
+    <!-- GOALS -->
+    <section class="panel" id="panel-goals">
+      <div class="panel-title"><span>&#x1F680; GOALS &amp; DREAMS</span><span class="panel-sub" id="goals-count"></span></div>
+      <div class="panel-list" id="goals-list"></div>
+      <form class="add-form" id="goal-form">
+        <input type="text" id="goal-title" placeholder="New goal… e.g. Run a half marathon" autocomplete="off">
+        <button type="submit">+</button>
+      </form>
+    </section>
+
+  </main>
+
+  <!-- MOBILE TAB BAR -->
+  <nav class="tabbar">
+    <button class="tab active" data-panel="panel-routines">&#x1F501;<span>Routines</span></button>
+    <button class="tab" data-panel="panel-missions">&#x26A1;<span>Missions</span></button>
+    <button class="tab" data-panel="panel-goals">&#x1F680;<span>Goals</span></button>
+    <a class="tab" href="/">&#x1F916;<span>JARVIS</span></a>
+  </nav>
+
+</div>
+
+<!-- XP float + level-up toast -->
+<div id="toast" class="toast"></div>
+
+<script src="/static/js/life.js"></script>
+</body>
+</html>

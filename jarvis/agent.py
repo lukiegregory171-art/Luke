@@ -117,6 +117,104 @@ TOOLS = [
         },
     },
     {
+        "name": "get_life_overview",
+        "description": "Get the full Life OS overview: daily routines (with streaks and today's status), tasks/missions, goals with milestones and progress, and XP/level stats. ALWAYS call this when asked about routines, habits, goals, progress, or 'how am I doing'.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "add_routine",
+        "description": "Add a new daily routine/habit to track (e.g. workout, reading, meditation).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title":       {"type": "string"},
+                "icon":        {"type": "string", "description": "A single emoji for the routine."},
+                "time_of_day": {"type": "string", "enum": ["morning", "afternoon", "evening", "anytime"]},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "check_routine",
+        "description": "Mark a daily routine as done for today (toggles). Use when the user says they did a habit, e.g. 'I finished my workout'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"routine": {"type": "string", "description": "Routine ID or (partial) title."}},
+            "required": ["routine"],
+        },
+    },
+    {
+        "name": "add_task",
+        "description": "Add a task/mission to the to-do list.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title":    {"type": "string"},
+                "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                "due":      {"type": "string", "description": "Optional due date YYYY-MM-DD."},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "complete_task",
+        "description": "Mark a task as completed (toggles). Match by ID or partial title.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"task": {"type": "string", "description": "Task ID or (partial) title."}},
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "add_goal",
+        "description": "Add a long-term goal or dream to work towards.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title":       {"type": "string"},
+                "why":         {"type": "string", "description": "Why this goal matters to the user."},
+                "target_date": {"type": "string", "description": "Optional target date YYYY-MM-DD."},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "set_goal_progress",
+        "description": "Set a goal's progress percentage (0-100). Only for goals without milestones.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "goal":     {"type": "string", "description": "Goal ID or (partial) title."},
+                "progress": {"type": "integer"},
+            },
+            "required": ["goal", "progress"],
+        },
+    },
+    {
+        "name": "add_milestone",
+        "description": "Add a milestone (sub-step) to a goal. Goal progress is then computed from completed milestones.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "goal":  {"type": "string", "description": "Goal ID or (partial) title."},
+                "title": {"type": "string", "description": "Milestone title."},
+            },
+            "required": ["goal", "title"],
+        },
+    },
+    {
+        "name": "complete_milestone",
+        "description": "Mark a goal milestone as done (toggles).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "goal":      {"type": "string", "description": "Goal ID or (partial) title."},
+                "milestone": {"type": "string", "description": "Milestone ID or (partial) title."},
+            },
+            "required": ["goal", "milestone"],
+        },
+    },
+    {
         "name": "run_command",
         "description": "Run a shell command and return its output.",
         "input_schema": {
@@ -139,8 +237,15 @@ Personality:
 - Proactive — if you notice something relevant, mention it
 - Concise in normal conversation; thorough when giving instructions
 
+You are also {USER_NAME}'s personal life coach, running the "Life OS" dashboard of routines, \
+tasks (missions), and long-term goals with streaks and XP.
+
 Capabilities you must use actively:
 - When asked about today's schedule, ALWAYS call get_calendar_events
+- When asked about routines, habits, goals, tasks, or progress, ALWAYS call get_life_overview first
+- When the user says they did a habit ("I worked out", "done my reading"), call check_routine
+- When the user mentions something they need to do, offer to add_task; when they share an ambition, offer to add_goal and help break it into milestones
+- Celebrate streaks and level-ups, and gently nudge on routines not yet done today — accountability with charm, never nagging
 - When asked a factual question you are uncertain about, call search_web
 - When asked about system info, call get_system_info
 - Answer how-to questions directly from your knowledge with numbered steps
