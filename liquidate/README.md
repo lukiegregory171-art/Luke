@@ -33,8 +33,11 @@ the browser:
    npm run dev
    ```
 3. Codespaces forwards **port 5173** and pops up the URL — click **Open in
-   Browser**. (If it doesn't open automatically, use the **Ports** tab and open
-   the `5173` URL.)
+   Browser** (use a real browser tab, not the in-editor preview, so pointer lock
+   works). If it doesn't open automatically, use the **Ports** tab and open the
+   `5173` URL.
+4. Click **CLICK TO PLAY** to lock the mouse. **WASD** to move, **mouse** to
+   aim, **click/hold** to fire, **R** to reload, **Esc** to pause.
 
 Only port 5173 is exposed: the Vite client proxies the game's WebSocket (`/ws`)
 to the internal Node server, so a single forwarded port is all you need. The
@@ -50,8 +53,10 @@ npm install
 npm run dev      # starts the server (:8080) and the Vite client (:5173)
 ```
 
-Open <http://localhost:5173>. The page connects to the server over WebSocket and
-shows the `init` handshake (your assigned id, the tick rate, and the loaded map).
+Open <http://localhost:5173> and click **CLICK TO PLAY**. You're in the solo
+practice range: **WASD** move, **mouse** aim, **click/hold** to fire, **R**
+reload, **Esc** to pause. (The `npm run dev` server is still started for the M0
+handshake and upcoming multiplayer, but M1 gameplay is fully client-side.)
 
 Other commands:
 
@@ -93,10 +98,25 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
 - `npm run dev` runs both; `npm test` passes (vec math, dt clamp, movement +
   collision).
 
+### Done (M1 — Core FPS, local feel)
+
+- Three.js arena built from the shared `GameMap` (floor, neon grid, perimeter
+  walls, edge-lit cover boxes) — what you see is what you collide with.
+- Pointer-lock mouse-look (yaw/pitch) wired so the camera's forward exactly
+  matches the shared `aimDirection`.
+- WASD movement through the shared `stepMovement` (the same collision code the
+  server will run), with a click-to-play / Esc-to-pause menu.
+- Hitscan rifle: crosshair, muzzle flash, fading tracer beam, recoil; ammo +
+  auto/manual reload; hitmarkers (white body / red headshot).
+- A target dummy whose body/head meshes match the shared hurtbox spheres; it
+  drops on kill, tracks a score, and respawns away from the player.
+- Ray math (`raySphere`, `rayAABB`, occluded `hitscan`) lives in `shared/` and
+  is unit-tested, so the server reuses it unchanged in M2.
+- Runtime-verified headless (WebGL renders, no console errors) and the solo
+  game logic (firing, occlusion, ammo/reload) is unit-tested.
+
 ### Not done yet
 
-- **M1** — Three.js arena, pointer-lock mouse-look, WASD + collision feel,
-  hitscan firing (tracer/muzzle/crosshair), ammo + reload, target dummy.
 - **M2** — matchmaking, rooms, prediction/reconciliation, opponent
   interpolation, server-side occluded hitscan, kills/respawn/scores,
   match-over + forfeit, latency display, headless integration test.
