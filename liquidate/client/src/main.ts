@@ -1,80 +1,53 @@
 /**
- * M0 client: connect to the server over WebSocket and log the `init` handshake.
- * The Three.js renderer, input, prediction, and HUD all arrive in later
- * milestones — for now this just proves the client and server talk.
+ * M1 bootstrap: build the world from the shared map, wire up input, weapon,
+ * target dummy, HUD, and the game loop, and drive pointer-lock from the menu.
+ *
+ * This milestone is solo and fully client-side — the authoritative server and
+ * networking arrive in M2. Movement and hit math come from @liquidate/shared so
+ * the server can reuse them unchanged.
  */
 
-import { decode, type ServerMessage } from '@liquidate/shared';
+import { DEFAULT_MAP } from '@liquidate/shared';
+import { World } from './world';
+import { Input } from './input';
+import { Weapon } from './weapon';
+import { Dummy } from './dummy';
+import { Hud } from './hud';
+import { Game } from './game';
 
-const statusEl = document.getElementById('status') as HTMLElement;
-const logEl = document.getElementById('log') as HTMLElement;
+const container = document.getElementById('game') as HTMLElement;
+const overlay = document.getElementById('overlay') as HTMLElement;
+const playBtn = document.getElementById('play') as HTMLButtonElement;
 
-function log(line: string): void {
-  const stamp = new Date().toLocaleTimeString();
-  logEl.textContent += `[${stamp}] ${line}\n`;
-  logEl.scrollTop = logEl.scrollHeight;
+const map = DEFAULT_MAP;
+const world = new World(container, map);
+const input = new Input(world.domElement);
+const weapon = new Weapon(world.scene, world.camera);
+const dummy = new Dummy(world.scene, map);
+const hud = new Hud();
+const game = new Game(map, world, input, weapon, dummy, hud);
+
+// Keep the dummy from respawning on top of the player.
+dummy.avoidProvider = () => game.playerFeet;
+
+// Menu / pause flow.
+playBtn.addEventListener('click', () => input.requestLock());
+input.onLockChange = (locked) => {
+  overlay.classList.toggle('hidden', locked);
+  hud.show(locked);
+  if (!locked) playBtn.textContent = 'CLICK TO RESUME';
+};
+
+// Fixed-ish loop: render every frame, only simulate while locked (playing).
+let last = performance.now();
+function frame(now: number): void {
+  const dt = Math.min((now - last) / 1000, 0.1); // clamp big gaps (tab switches)
+  last = now;
+
+  if (input.locked) game.update(dt);
+  else weapon.update(dt); // keep tracers/flash fading while paused
+
+  world.render();
+  requestAnimationFrame(frame);
 }
-
-function setStatus(text: string, kind: 'ok' | 'err' | '' = ''): void {
-  statusEl.textContent = text;
-  statusEl.className = `status${kind ? ' ' + kind : ''}`;
-}
-
-// Connect to `/ws` on the same origin as the page. The Vite dev server proxies
-// this to the Node server, and the production Node server serves it directly —
-// so the same URL works on localhost, in a forwarded Codespaces port, and in
-// production, with no hard-coded host or port.
-const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsUrl = `${wsProto}//${location.host}/ws`;
-
-let reconnectAttempts = 0;
-const MAX_RECONNECT = 20;
-
-function connect(): void {
-  log(`connecting to ${wsUrl}`);
-  const socket = new WebSocket(wsUrl);
-
-  socket.addEventListener('open', () => {
-    reconnectAttempts = 0;
-    setStatus('connected — waiting for handshake…', 'ok');
-    log('socket open');
-  });
-
-  socket.addEventListener('message', (event) => {
-    let msg: ServerMessage;
-    try {
-      msg = decode<ServerMessage>(event.data as string);
-    } catch {
-      log(`unparseable message: ${event.data}`);
-      return;
-    }
-
-    if (msg.type === 'init') {
-      console.log('[init]', msg);
-      setStatus(`init received — you are ${msg.id.slice(0, 8)}… on map "${msg.map.name}"`, 'ok');
-      log(
-        `init: id=${msg.id} tickRate=${msg.tickRate}Hz map=${msg.map.name} (${msg.map.obstacles.length} obstacles)`,
-      );
-    } else {
-      log(`message: ${msg.type}`);
-    }
-  });
-
-  socket.addEventListener('close', () => {
-    if (reconnectAttempts < MAX_RECONNECT) {
-      reconnectAttempts++;
-      setStatus(`disconnected — reconnecting (${reconnectAttempts})…`, 'err');
-      log('socket closed; retrying in 1s');
-      setTimeout(connect, 1000);
-    } else {
-      setStatus('disconnected — is the server running? (npm run dev)', 'err');
-      log('socket closed; gave up reconnecting');
-    }
-  });
-
-  socket.addEventListener('error', () => {
-    log('socket error');
-  });
-}
-
-connect();
+requestAnimationFrame(frame);

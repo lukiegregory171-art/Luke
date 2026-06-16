@@ -3,18 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LIQUIDATE</title>
+    <title>LIQUIDATE — Practice Range</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app">
-      <header>
-        <h1>LIQUIDATE</h1>
-        <p class="tag">server-authoritative 1v1 — DEMO play-money only</p>
-      </header>
-      <section id="status" class="status">connecting…</section>
-      <pre id="log" class="log"></pre>
+    <div id="game"></div>
+
+    <!-- HUD overlay (shown while playing) -->
+    <div id="hud" class="hidden">
+      <div id="crosshair">
+        <span class="ch ch-t"></span><span class="ch ch-b"></span> <span class="ch ch-l"></span
+        ><span class="ch ch-r"></span>
+      </div>
+      <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
+      <div class="hud-top">
+        <span id="score">DUMMIES&nbsp;DROPPED&nbsp;·&nbsp;0</span>
+      </div>
+      <div class="hud-bottom-right">
+        <div id="ammo">
+          <span id="ammo-cur">30</span><span class="slash">/</span><span id="ammo-max">30</span>
+        </div>
+        <div id="reload" class="hidden">RELOADING…</div>
+      </div>
     </div>
+
+    <!-- Start / pause overlay -->
+    <div id="overlay">
+      <div class="overlay-card">
+        <h1>LIQUIDATE</h1>
+        <p class="sub">PRACTICE&nbsp;RANGE · DEMO</p>
+        <button id="play">CLICK TO PLAY</button>
+        <ul class="controls">
+          <li><b>WASD</b> move</li>
+          <li><b>Mouse</b> look</li>
+          <li><b>Click</b> / hold to fire</li>
+          <li><b>R</b> reload</li>
+          <li><b>Esc</b> pause</li>
+        </ul>
+        <p class="footnote">Solo practice (M1). Real 1v1 duels &amp; the demo economy come next.</p>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
