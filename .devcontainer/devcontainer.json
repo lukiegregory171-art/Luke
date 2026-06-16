@@ -1,0 +1,28 @@
+{
+  "name": "LIQUIDATE (Node 20)",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  // Install the LIQUIDATE workspace dependencies once the container is created.
+  "postCreateCommand": "cd liquidate && npm install",
+  // Only the Vite client port needs forwarding: it proxies the game's
+  // WebSocket (/ws) through to the Node server inside the container, so the
+  // server's 8080 stays internal.
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "LIQUIDATE",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  }
+}

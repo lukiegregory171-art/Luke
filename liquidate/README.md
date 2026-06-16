@@ -19,7 +19,29 @@ position, hits, kills, ammo, score, and currency.
   identical code.
 - **Tests:** Vitest (unit) + a headless integration match test (from M2).
 
-## Run it
+## Run it in the browser — GitHub Codespaces (no local install)
+
+The repo ships a dev container (`.devcontainer/`), so you can run everything in
+the browser:
+
+1. On the GitHub repo, click **Code → Codespaces → Create codespace** on the
+   `claude/zealous-cannon-4jsywq` branch. It builds a Node 20 container and
+   installs dependencies automatically (takes a minute the first time).
+2. In the Codespace terminal:
+   ```bash
+   cd liquidate
+   npm run dev
+   ```
+3. Codespaces forwards **port 5173** and pops up the URL — click **Open in
+   Browser**. (If it doesn't open automatically, use the **Ports** tab and open
+   the `5173` URL.)
+
+Only port 5173 is exposed: the Vite client proxies the game's WebSocket (`/ws`)
+to the internal Node server, so a single forwarded port is all you need. The
+forwarded URL is private to your GitHub account by default — to let a second
+player join later (M2), set the port's visibility to **Public** in the Ports tab.
+
+## Run it locally
 
 Requires Node 20+. From the `liquidate/` directory:
 
@@ -63,6 +85,11 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
 - Strict TypeScript, ESLint (flat config) + Prettier.
 - `shared/` exports config, map data, vector math, and movement+collision.
 - Node WebSocket server with the `init` handshake; client connects and logs it.
+- Single-origin networking: the client talks to `/ws` on its own host (Vite
+  proxies it in dev, the Node server serves it in prod), so localhost,
+  Codespaces, and the production build all work with the same client code.
+- GitHub Codespaces dev container (`.devcontainer/`) — run it entirely in the
+  browser with one forwarded port.
 - `npm run dev` runs both; `npm test` passes (vec math, dt clamp, movement +
   collision).
 
