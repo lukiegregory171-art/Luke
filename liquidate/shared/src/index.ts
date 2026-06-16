@@ -8,4 +8,5 @@ export * from './config';
 export * from './vec';
 export * from './map';
 export * from './movement';
+export * from './raycast';
 export * from './messages';
