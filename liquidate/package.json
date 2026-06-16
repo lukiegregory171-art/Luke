@@ -1,0 +1,40 @@
+{
+  "name": "liquidate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "LIQUIDATE — a server-authoritative 1v1 browser FPS with a play-money crypto-arena economy.",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n SERVER,CLIENT -c green,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace @liquidate/server run dev",
+    "dev:client": "npm --workspace @liquidate/client run dev",
+    "build": "npm --workspace @liquidate/server run build && npm --workspace @liquidate/client run build",
+    "typecheck": "npm --workspace @liquidate/shared run typecheck && npm --workspace @liquidate/server run typecheck && npm --workspace @liquidate/client run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^22.7.5",
+    "concurrently": "^9.0.1",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^2.1.3"
+  }
+}
