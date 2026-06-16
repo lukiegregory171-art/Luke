@@ -4,7 +4,7 @@
  * milestones — for now this just proves the client and server talk.
  */
 
-import { SERVER_PORT, decode, type ServerMessage } from '@liquidate/shared';
+import { decode, type ServerMessage } from '@liquidate/shared';
 
 const statusEl = document.getElementById('status') as HTMLElement;
 const logEl = document.getElementById('log') as HTMLElement;
@@ -20,44 +20,61 @@ function setStatus(text: string, kind: 'ok' | 'err' | '' = ''): void {
   statusEl.className = `status${kind ? ' ' + kind : ''}`;
 }
 
-// In dev the Vite client and the WS server run on different ports, so connect
-// to the server explicitly on SERVER_PORT.
-const wsUrl = `ws://${location.hostname}:${SERVER_PORT}`;
-log(`connecting to ${wsUrl}`);
+// Connect to `/ws` on the same origin as the page. The Vite dev server proxies
+// this to the Node server, and the production Node server serves it directly —
+// so the same URL works on localhost, in a forwarded Codespaces port, and in
+// production, with no hard-coded host or port.
+const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${wsProto}//${location.host}/ws`;
 
-const socket = new WebSocket(wsUrl);
+let reconnectAttempts = 0;
+const MAX_RECONNECT = 20;
 
-socket.addEventListener('open', () => {
-  setStatus('connected — waiting for handshake…', 'ok');
-  log('socket open');
-});
+function connect(): void {
+  log(`connecting to ${wsUrl}`);
+  const socket = new WebSocket(wsUrl);
 
-socket.addEventListener('message', (event) => {
-  let msg: ServerMessage;
-  try {
-    msg = decode<ServerMessage>(event.data as string);
-  } catch {
-    log(`unparseable message: ${event.data}`);
-    return;
-  }
+  socket.addEventListener('open', () => {
+    reconnectAttempts = 0;
+    setStatus('connected — waiting for handshake…', 'ok');
+    log('socket open');
+  });
 
-  if (msg.type === 'init') {
-    console.log('[init]', msg);
-    setStatus(`init received — you are ${msg.id.slice(0, 8)}… on map "${msg.map.name}"`, 'ok');
-    log(
-      `init: id=${msg.id} tickRate=${msg.tickRate}Hz map=${msg.map.name} (${msg.map.obstacles.length} obstacles)`,
-    );
-  } else {
-    log(`message: ${msg.type}`);
-  }
-});
+  socket.addEventListener('message', (event) => {
+    let msg: ServerMessage;
+    try {
+      msg = decode<ServerMessage>(event.data as string);
+    } catch {
+      log(`unparseable message: ${event.data}`);
+      return;
+    }
 
-socket.addEventListener('close', () => {
-  setStatus('disconnected', 'err');
-  log('socket closed');
-});
+    if (msg.type === 'init') {
+      console.log('[init]', msg);
+      setStatus(`init received — you are ${msg.id.slice(0, 8)}… on map "${msg.map.name}"`, 'ok');
+      log(
+        `init: id=${msg.id} tickRate=${msg.tickRate}Hz map=${msg.map.name} (${msg.map.obstacles.length} obstacles)`,
+      );
+    } else {
+      log(`message: ${msg.type}`);
+    }
+  });
 
-socket.addEventListener('error', () => {
-  setStatus('connection error — is the server running? (npm run dev)', 'err');
-  log('socket error');
-});
+  socket.addEventListener('close', () => {
+    if (reconnectAttempts < MAX_RECONNECT) {
+      reconnectAttempts++;
+      setStatus(`disconnected — reconnecting (${reconnectAttempts})…`, 'err');
+      log('socket closed; retrying in 1s');
+      setTimeout(connect, 1000);
+    } else {
+      setStatus('disconnected — is the server running? (npm run dev)', 'err');
+      log('socket closed; gave up reconnecting');
+    }
+  });
+
+  socket.addEventListener('error', () => {
+    log('socket error');
+  });
+}
+
+connect();

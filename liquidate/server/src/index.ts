@@ -79,7 +79,9 @@ function serveStatic(req: IncomingMessage, res: ServerResponse): void {
 }
 
 const httpServer = createServer(serveStatic);
-const wss = new WebSocketServer({ server: httpServer });
+// Attach the WebSocket server to the `/ws` path so it can share the port with
+// HTTP static serving, and so a dev proxy (Vite) can forward just this path.
+const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
