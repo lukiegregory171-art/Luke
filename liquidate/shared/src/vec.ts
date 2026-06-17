@@ -90,3 +90,14 @@ export function forwardFromYaw(yaw: number): Vec3 {
 export function rightFromYaw(yaw: number): Vec3 {
   return { x: Math.cos(yaw), y: 0, z: -Math.sin(yaw) };
 }
+
+/** Inverse of {@link aimDirection}: yaw/pitch that look along `dir`. */
+export function aimAngles(dir: Vec3): { yaw: number; pitch: number } {
+  const len = length(dir);
+  if (len < 1e-9) return { yaw: 0, pitch: 0 };
+  const d = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
+  return {
+    yaw: Math.atan2(-d.x, -d.z),
+    pitch: Math.asin(clamp(d.y, -1, 1)),
+  };
+}
