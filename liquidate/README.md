@@ -186,9 +186,24 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
   conservation (nothing created/destroyed except the rake) and reconciliation;
   the integration test drives a full staked match and checks the play-money moves.
 
+### Done (M5 — devnet token cosmetics, optional & non-wagering)
+
+> **Devnet-only, read-only, cosmetic, off by default.** No signing, transfers,
+> staking, wagering, real value, or mainnet — devnet tokens are worthless test
+> tokens. Nothing in the match or economy depends on this.
+
+- **Cosmetic skins** (accent-colour themes) — a shared, unit-tested unlock model
+  (`unlockedSkins(balance)`); free skins always available, others gated by a
+  devnet token balance. Selection persists in localStorage and recolours the HUD.
+- **Isolated, feature-flagged token module** (`client/src/token.ts`): with
+  `VITE_TOKEN=1` the lobby shows a wallet section that does a **read-only**
+  devnet balance lookup (public JSON-RPC, no library/keys; Phantom public key or
+  a pasted address) and unlocks the matching skins. Flag off → the module is
+  never wired in and only free skins show.
+- Configure via build env: `VITE_TOKEN=1`, `VITE_TOKEN_MINT=<devnet SPL mint>`,
+  optional `VITE_SOLANA_RPC`.
+
 ### Not done yet
-- **M5** *(optional, devnet only)* — read-only wallet connect for cosmetic/ranked
-  utility behind a feature flag. No wagering, no real value.
 - **M6** — lag compensation, reconnection grace, anti-cheat sanity checks,
   structured logging, Docker deploy.
 
