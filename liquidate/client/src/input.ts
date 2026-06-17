@@ -3,7 +3,7 @@
  * pressed-keys set that the game turns into movement input each frame.
  */
 
-import { clamp } from '@liquidate/shared';
+import { clamp, type WeaponId } from '@liquidate/shared';
 
 const PITCH_LIMIT = 1.5; // ~86 degrees up/down
 const DEFAULT_SENSITIVITY = 0.0022;
@@ -16,8 +16,10 @@ export class Input {
   sensitivity = DEFAULT_SENSITIVITY;
 
   readonly keys = new Set<string>();
+  private dashQueued = false;
 
   onReload: () => void = () => {};
+  onSwitch: (weapon: WeaponId) => void = () => {};
   onLockChange: (locked: boolean) => void = () => {};
 
   constructor(private readonly target: HTMLElement) {
@@ -60,11 +62,23 @@ export class Input {
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     if (!this.locked) return;
+    const fresh = !this.keys.has(e.code);
     this.keys.add(e.code);
+    if (!fresh) return; // ignore auto-repeat for edge-triggered actions
     if (e.code === 'KeyR') this.onReload();
+    else if (e.code === 'Space') this.dashQueued = true;
+    else if (e.code === 'Digit1') this.onSwitch('rifle');
+    else if (e.code === 'Digit2') this.onSwitch('shotgun');
   };
 
   private handleKeyUp = (e: KeyboardEvent): void => {
     this.keys.delete(e.code);
   };
+
+  /** Returns true once after a dash key press (edge-triggered). */
+  consumeDash(): boolean {
+    const d = this.dashQueued;
+    this.dashQueued = false;
+    return d;
+  }
 }

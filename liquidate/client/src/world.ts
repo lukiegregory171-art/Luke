@@ -22,12 +22,11 @@ export class World {
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGLRenderer;
 
-  constructor(
-    private readonly container: HTMLElement,
-    map: GameMap,
-  ) {
+  // Arena geometry lives in its own group so it can be rebuilt per map.
+  private readonly arena = new THREE.Group();
+
+  constructor(private readonly container: HTMLElement) {
     this.scene.background = new THREE.Color(COLORS.sky);
-    this.scene.fog = new THREE.Fog(COLORS.fog, 18, Math.max(map.width, map.depth) * 1.4);
 
     this.camera = new THREE.PerspectiveCamera(
       82,
@@ -42,14 +41,26 @@ export class World {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.container.appendChild(this.renderer.domElement);
 
+    this.scene.add(this.arena);
     this.buildLights();
-    this.buildArena(map);
 
     window.addEventListener('resize', this.handleResize);
   }
 
   get domElement(): HTMLCanvasElement {
     return this.renderer.domElement;
+  }
+
+  /** Build (or rebuild) the arena geometry for the given map. */
+  setMap(map: GameMap): void {
+    // Dispose and clear any previous arena.
+    this.arena.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+    });
+    this.arena.clear();
+    this.scene.fog = new THREE.Fog(COLORS.fog, 18, Math.max(map.width, map.depth) * 1.4);
+    this.buildArena(map);
   }
 
   private buildLights(): void {
@@ -72,7 +83,7 @@ export class World {
       new THREE.MeshStandardMaterial({ color: COLORS.floor, roughness: 0.95, metalness: 0.1 }),
     );
     floor.rotation.x = -Math.PI / 2;
-    this.scene.add(floor);
+    this.arena.add(floor);
 
     // Neon grid over the floor for an arena feel.
     const grid = new THREE.GridHelper(
@@ -84,7 +95,7 @@ export class World {
     (grid.material as THREE.Material).opacity = 0.25;
     (grid.material as THREE.Material).transparent = true;
     grid.position.y = 0.02;
-    this.scene.add(grid);
+    this.arena.add(grid);
 
     // Perimeter walls.
     const halfW = map.width / 2;
@@ -101,7 +112,7 @@ export class World {
     for (const [cx, cz, sx, sz] of walls) {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(sx, h, sz), wallMat);
       wall.position.set(cx, h / 2, cz);
-      this.scene.add(wall);
+      this.arena.add(wall);
     }
 
     // Obstacles (cover) — solid box plus a neon wireframe edge.
@@ -121,14 +132,14 @@ export class World {
         (box.min.y + box.max.y) / 2,
         (box.min.z + box.max.z) / 2,
       );
-      this.scene.add(mesh);
+      this.arena.add(mesh);
 
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
         new THREE.LineBasicMaterial({ color: COLORS.edge, transparent: true, opacity: 0.5 }),
       );
       edges.position.copy(mesh.position);
-      this.scene.add(edges);
+      this.arena.add(edges);
     }
   }
 

@@ -24,6 +24,7 @@ export class Weapon {
 
   // Recoil state (smoothly returns to zero).
   private recoil = 0;
+  private flashScale = 1;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -84,15 +85,31 @@ export class Weapon {
     return this.muzzle.getWorldPosition(out);
   }
 
-  fire(hitPoint: Vec3): void {
-    // Muzzle flash on.
-    (this.flash.material as THREE.MeshBasicMaterial).opacity = 1;
-    this.flash.rotation.z = Math.random() * Math.PI;
-    this.flash.scale.setScalar(0.8 + Math.random() * 0.5);
-    this.flashLight.intensity = 6;
+  /** Switch the viewmodel's weapon (affects muzzle flash size / recoil feel). */
+  setWeapon(id: 'rifle' | 'shotgun'): void {
+    this.flashScale = id === 'shotgun' ? 1.7 : 1;
+  }
 
-    this.recoil = Math.min(this.recoil + 0.05, 0.12);
+  private flashAndKick(kick: number): void {
+    const mat = this.flash.material as THREE.MeshBasicMaterial;
+    mat.opacity = 1;
+    this.flash.rotation.z = Math.random() * Math.PI;
+    this.flash.scale.setScalar((0.8 + Math.random() * 0.5) * this.flashScale);
+    this.flashLight.intensity = 6;
+    this.recoil = Math.min(this.recoil + kick, 0.16);
+  }
+
+  /** Single-tracer shot (rifle, or any pinpoint weapon). */
+  fire(hitPoint: Vec3): void {
+    this.flashAndKick(0.05);
     this.spawnTracer(this.muzzleWorldPosition(), hitPoint);
+  }
+
+  /** Multi-tracer shot (shotgun pellets) sharing one muzzle flash. */
+  fireMany(endpoints: Vec3[]): void {
+    this.flashAndKick(0.09);
+    const from = this.muzzleWorldPosition();
+    for (const end of endpoints) this.spawnTracer(from, end);
   }
 
   /** Render a tracer for another player's shot (world-space origin and endpoint). */

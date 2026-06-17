@@ -18,6 +18,9 @@ export class Hud {
   private readonly latency = document.getElementById('latency') as HTMLElement;
   private readonly damage = document.getElementById('damage') as HTMLElement;
   private readonly bannerEl = document.getElementById('banner') as HTMLElement;
+  private readonly weaponEl = document.getElementById('weapon') as HTMLElement;
+  private readonly killfeed = document.getElementById('killfeed') as HTMLElement;
+  private readonly dmgArrow = document.getElementById('dmgdir-arrow') as HTMLElement;
 
   private hitTimer?: ReturnType<typeof setTimeout>;
   private bannerTimer?: ReturnType<typeof setTimeout>;
@@ -77,5 +80,26 @@ export class Hud {
     this.bannerEl.className = `show ${kind}`;
     if (this.bannerTimer) clearTimeout(this.bannerTimer);
     this.bannerTimer = setTimeout(() => (this.bannerEl.className = ''), 1400);
+  }
+
+  setWeapon(name: string, slot: number): void {
+    this.weaponEl.innerHTML = `${name.toUpperCase()} <span class="wkey">[${slot}]</span>`;
+  }
+
+  addKill(killer: string, victim: string, headshot: boolean): void {
+    const el = document.createElement('div');
+    el.className = `kf${headshot ? ' head' : ''}`;
+    el.innerHTML = `<b>${killer}</b> ▸ <span class="vic">${victim}</span>`;
+    this.killfeed.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+    while (this.killfeed.childElementCount > 4) this.killfeed.firstElementChild?.remove();
+  }
+
+  /** Show a damage indicator pointing toward the attacker (radians, 0 = ahead). */
+  damageFrom(angle: number): void {
+    this.dmgArrow.style.transform = `rotate(${angle}rad)`;
+    this.dmgArrow.classList.remove('show');
+    void this.dmgArrow.offsetWidth;
+    this.dmgArrow.classList.add('show');
   }
 }

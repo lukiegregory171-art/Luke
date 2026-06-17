@@ -256,6 +256,80 @@ body {
   bottom: 26px;
   text-align: right;
 }
+#weapon {
+  letter-spacing: 0.18em;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+#weapon .wkey {
+  color: var(--accent);
+}
+
+/* Kill feed (top-left) */
+#killfeed {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+#killfeed .kf {
+  background: rgba(5, 7, 10, 0.5);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border-left: 2px solid var(--accent);
+  animation: kffade 4s forwards;
+}
+#killfeed .kf .vic {
+  color: var(--muted, #8aa);
+}
+#killfeed .kf.head {
+  border-left-color: var(--danger);
+}
+@keyframes kffade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Damage direction indicator (arc around the crosshair) */
+#dmgdir {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+#dmgdir-arrow {
+  position: absolute;
+  left: -10px;
+  top: -120px;
+  width: 20px;
+  height: 60px;
+  transform-origin: 10px 120px;
+  opacity: 0;
+  background: linear-gradient(to top, rgba(224, 30, 60, 0), rgba(224, 30, 60, 0.85));
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+#dmgdir-arrow.show {
+  animation: dmgdir 0.9s ease-out;
+}
+@keyframes dmgdir {
+  0% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 #ammo {
   font-size: 2.2rem;
   font-weight: 800;

@@ -4,24 +4,32 @@
  * - Self: client-side prediction with server reconciliation. Each fixed step we
  *   build an input, apply it locally with the SHARED stepMovement, send it, and
  *   keep it until the server acks it. On each snapshot we snap to the
- *   authoritative position and replay the still-unacked inputs.
+ *   authoritative movement state (pos + velocity + dash cooldown) and replay the
+ *   still-unacked inputs.
  * - Opponent: entity interpolation (~100 ms behind), via the Opponent class.
  * - Firing is server-authoritative (ammo/hits/score from snapshots/events); the
  *   client only plays immediate muzzle/tracer cosmetics and hitmarkers.
  */
 
 import {
+  DEFAULT_WEAPON,
   EYE_HEIGHT,
   MAX_HEALTH,
-  RIFLE,
+  WEAPONS,
   aimDirection,
+  forwardFromYaw,
+  makeMoveState,
   nearestObstacle,
+  perturbDirection,
+  rightFromYaw,
   stepMovement,
   type GameMap,
   type InputMessage,
+  type MoveState,
   type ServerMessage,
   type StartMessage,
   type Vec3,
+  type WeaponId,
 } from '@liquidate/shared';
 import type { World } from './world';
 import type { Input } from './input';
@@ -29,6 +37,7 @@ import type { Weapon } from './weapon';
 import type { Hud } from './hud';
 import type { Net } from './net';
 import type { Opponent } from './opponent';
+import type { Sfx } from './audio';
 
 const STEP = 1 / 60; // fixed input/prediction step
 const INTERP_MS = 100; // render the opponent this far in the past
@@ -47,23 +56,28 @@ export interface MatchCallbacks {
   onSnapshot?: () => void;
 }
 
+const SLOT: Record<WeaponId, number> = { rifle: 1, shotgun: 2 };
+
 export class Match {
   private selfId = '';
   private oppId = '';
   private spawnIndex: 0 | 1 = 0;
 
-  private predicted: Vec3 = { x: 0, y: 0, z: 0 };
+  private predicted: MoveState = makeMoveState({ x: 0, y: 0, z: 0 });
   private pending: InputMessage[] = [];
   private seq = 0;
   private acc = 0;
 
   private selfAlive = true;
-  private selfAmmo = RIFLE.magazine;
+  private selfAmmo = WEAPONS.rifle.magazine;
   private selfReloading = false;
+  private selfWeapon: WeaponId = DEFAULT_WEAPON;
   private prevHealth = MAX_HEALTH;
 
   private selfScore = 0;
   private oppScore = 0;
+  private oppPos: Vec3 = { x: 0, y: 0, z: 0 };
+  private lastHeadshot = false;
 
   private lastSnapTime = 0;
   private lastSnapArrival = 0;
@@ -74,20 +88,24 @@ export class Match {
   private oppLeft = false;
 
   constructor(
-    private readonly map: GameMap,
+    private map: GameMap,
     private readonly world: World,
     private readonly input: Input,
     private readonly weapon: Weapon,
     private readonly hud: Hud,
     private readonly net: Net,
     private readonly opponent: Opponent,
+    private readonly sfx: Sfx,
     private readonly callbacks: MatchCallbacks,
   ) {
     this.net.onMessage = (m) => this.handle(m);
-    this.input.onReload = () => this.net.send({ type: 'reload' });
+    this.input.onReload = () => {
+      this.net.send({ type: 'reload' });
+      this.sfx.reload();
+    };
+    this.input.onSwitch = (w) => this.net.send({ type: 'switch', weapon: w });
   }
 
-  /** Connect and enter matchmaking. */
   connect(): void {
     this.net.connect();
   }
@@ -107,11 +125,10 @@ export class Match {
         this.onSnap(msg);
         break;
       case 'fire':
-        if (msg.id === this.oppId) this.renderOpponentShot(msg.origin, msg.dir);
+        if (msg.id === this.oppId) this.renderOpponentShot(msg.weapon, msg.origin, msg.dir);
         break;
       case 'hit':
-        if (msg.shooter === this.selfId) this.hud.hit(msg.headshot);
-        if (msg.target === this.selfId) this.hud.damageFlash();
+        this.onHit(msg.shooter, msg.target, msg.headshot);
         break;
       case 'kill':
         this.onKill(msg.killer, msg.victim);
@@ -131,26 +148,29 @@ export class Match {
   }
 
   private begin(start: StartMessage): void {
+    this.map = start.map;
+    this.world.setMap(this.map);
     this.oppId = start.opponentId;
     this.spawnIndex = start.selfSpawnIndex;
     const spawn = this.map.spawns[this.spawnIndex];
-    this.predicted = { ...spawn.pos };
+    this.predicted = makeMoveState(spawn.pos);
     this.input.yaw = spawn.yaw;
     this.input.pitch = 0;
     this.pending = [];
+    this.selfWeapon = DEFAULT_WEAPON;
     this.playing = true;
     this.syncCamera();
     this.hud.setScores(0, 0);
     this.hud.setHealth(MAX_HEALTH);
-    this.hud.setAmmo(RIFLE.magazine, RIFLE.magazine);
+    this.hud.setAmmo(WEAPONS.rifle.magazine, WEAPONS.rifle.magazine);
+    this.hud.setWeapon(WEAPONS.rifle.name, SLOT.rifle);
+    this.weapon.setWeapon('rifle');
     this.callbacks.onPlaying();
   }
 
-  /** Called every render frame. */
   update(dt: number): void {
     if (!this.playing || this.over) return;
 
-    // Fixed-step input sampling + prediction.
     this.acc += dt;
     let steps = 0;
     while (this.acc >= STEP && steps < 5) {
@@ -159,14 +179,11 @@ export class Match {
       steps++;
     }
 
-    // Firing (rate-limited locally; the server is authoritative on the result).
     this.fireCooldown = Math.max(0, this.fireCooldown - dt);
     if (this.input.locked && this.input.firing) this.tryFire();
 
     this.syncCamera();
 
-    // Opponent interpolation: render ~INTERP_MS behind the latest snapshot,
-    // advanced smoothly by the local clock between snapshots.
     if (this.lastSnapTime > 0) {
       const renderTime = this.lastSnapTime + (performance.now() - this.lastSnapArrival) - INTERP_MS;
       this.opponent.update(renderTime);
@@ -177,10 +194,12 @@ export class Match {
   }
 
   private sampleInput(step: number): void {
-    const canMove = this.input.locked && this.selfAlive;
+    const canAct = this.input.locked && this.selfAlive;
     const k = this.input.keys;
-    const moveFwd = canMove ? (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) : 0;
-    const moveRight = canMove ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
+    const moveFwd = canAct ? (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) : 0;
+    const moveRight = canAct ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
+    const dash = canAct && this.input.consumeDash();
+    if (dash) this.sfx.dash();
 
     this.seq++;
     const msg: InputMessage = {
@@ -191,12 +210,13 @@ export class Match {
       moveRight,
       yaw: this.input.yaw,
       pitch: this.input.pitch,
+      dash,
     };
 
     if (this.selfAlive) {
       this.predicted = stepMovement(
         this.predicted,
-        { moveFwd, moveRight, yaw: this.input.yaw },
+        { moveFwd, moveRight, yaw: this.input.yaw, dash },
         step,
         this.map,
       );
@@ -206,20 +226,31 @@ export class Match {
   }
 
   private tryFire(): void {
+    const w = WEAPONS[this.selfWeapon];
     if (this.fireCooldown > 0 || this.selfReloading || this.selfAmmo <= 0 || !this.selfAlive)
       return;
-    this.fireCooldown = RIFLE.fireInterval;
+    this.fireCooldown = w.fireInterval;
     this.net.send({ type: 'fire', seq: this.seq });
 
-    // Immediate cosmetics (the server decides if it actually hit).
     const eye = this.eye();
     const dir = aimDirection(this.input.yaw, this.input.pitch);
-    const dist = Math.min(nearestObstacle(eye, dir, this.map.obstacles), RIFLE.range, 80);
-    this.weapon.fire({ x: eye.x + dir.x * dist, y: eye.y + dir.y * dist, z: eye.z + dir.z * dist });
+    if (w.pellets > 1) {
+      const ends: Vec3[] = [];
+      for (let i = 0; i < w.pellets; i++)
+        ends.push(this.endpoint(eye, perturbDirection(dir, w.spread), w.range));
+      this.weapon.fireMany(ends);
+    } else {
+      this.weapon.fire(this.endpoint(eye, dir, w.range));
+    }
+    this.sfx.shoot(this.selfWeapon);
 
-    // Predict the ammo count down for a responsive HUD (snapshot will correct it).
     this.selfAmmo = Math.max(0, this.selfAmmo - 1);
-    this.hud.setAmmo(this.selfAmmo, RIFLE.magazine);
+    this.hud.setAmmo(this.selfAmmo, w.magazine);
+  }
+
+  private endpoint(eye: Vec3, dir: Vec3, range: number): Vec3 {
+    const dist = Math.min(nearestObstacle(eye, dir, this.map.obstacles), range, 80);
+    return { x: eye.x + dir.x * dist, y: eye.y + dir.y * dist, z: eye.z + dir.z * dist };
   }
 
   private onSnap(msg: Extract<ServerMessage, { type: 'snap' }>): void {
@@ -232,22 +263,30 @@ export class Match {
       this.selfReloading = self.reloading;
       this.selfScore = self.score;
 
-      // Reconcile: snap to authority, then replay unacked inputs.
       const acked = msg.ack[this.selfId] ?? 0;
       this.pending = this.pending.filter((i) => i.seq > acked);
-      this.predicted = { x: self.x, y: self.y, z: self.z };
+      this.predicted = {
+        pos: { x: self.x, y: self.y, z: self.z },
+        vel: { x: self.vx, y: 0, z: self.vz },
+        dashCd: self.dashCd,
+      };
       if (self.alive) {
         for (const i of this.pending) {
           this.predicted = stepMovement(
             this.predicted,
-            { moveFwd: i.moveFwd, moveRight: i.moveRight, yaw: i.yaw },
+            { moveFwd: i.moveFwd, moveRight: i.moveRight, yaw: i.yaw, dash: i.dash },
             i.dt,
             this.map,
           );
         }
       }
 
-      this.hud.setAmmo(self.ammo, RIFLE.magazine);
+      if (self.weapon !== this.selfWeapon) {
+        this.selfWeapon = self.weapon;
+        this.weapon.setWeapon(self.weapon);
+        this.hud.setWeapon(WEAPONS[self.weapon].name, SLOT[self.weapon]);
+      }
+      this.hud.setAmmo(self.ammo, WEAPONS[self.weapon].magazine);
       this.hud.setReloading(self.reloading);
       this.hud.setHealth(self.health);
       if (self.health < this.prevHealth) this.hud.damageFlash();
@@ -256,6 +295,7 @@ export class Match {
 
     if (opp) {
       this.oppScore = opp.score;
+      this.oppPos = { x: opp.x, y: opp.y, z: opp.z };
       this.opponent.pushFrame(msg.serverTime, opp.x, opp.z, opp.yaw, opp.alive);
     }
 
@@ -265,22 +305,47 @@ export class Match {
     this.callbacks.onSnapshot?.();
   }
 
-  private renderOpponentShot(origin: Vec3, dir: Vec3): void {
-    const dist = Math.min(nearestObstacle(origin, dir, this.map.obstacles), RIFLE.range, 80);
-    this.weapon.spawnWorldTracer(origin, {
-      x: origin.x + dir.x * dist,
-      y: origin.y + dir.y * dist,
-      z: origin.z + dir.z * dist,
-    });
+  private renderOpponentShot(weapon: WeaponId, origin: Vec3, dir: Vec3): void {
+    const w = WEAPONS[weapon];
+    if (w.pellets > 1) {
+      for (let i = 0; i < w.pellets; i++) {
+        this.weapon.spawnWorldTracer(
+          origin,
+          this.endpoint(origin, perturbDirection(dir, w.spread), w.range),
+        );
+      }
+    } else {
+      this.weapon.spawnWorldTracer(origin, this.endpoint(origin, dir, w.range));
+    }
+    this.sfx.shoot(weapon);
+  }
+
+  private onHit(shooter: string, target: string, headshot: boolean): void {
+    this.lastHeadshot = headshot;
+    if (shooter === this.selfId) {
+      this.hud.hit(headshot);
+      this.sfx.hit(headshot);
+    }
+    if (target === this.selfId) {
+      this.hud.damageFlash();
+      this.hud.damageFrom(this.bearingTo(this.oppPos));
+    }
   }
 
   private onKill(killer: string, victim: string): void {
-    if (victim === this.selfId) this.hud.banner('YOU DIED', 'bad');
-    else if (killer === this.selfId) this.hud.banner('OPPONENT DOWN', 'good');
+    const label = (id: string): string => (id === this.selfId ? 'YOU' : 'OPP');
+    this.hud.addKill(label(killer), label(victim), this.lastHeadshot);
+    if (victim === this.selfId) {
+      this.hud.banner('YOU DIED', 'bad');
+      this.sfx.death();
+    } else if (killer === this.selfId) {
+      this.hud.banner('OPPONENT DOWN', 'good');
+      this.sfx.kill();
+    }
   }
 
   private onSelfRespawn(x: number, y: number, z: number, yaw: number): void {
-    this.predicted = { x, y, z };
+    this.predicted = makeMoveState({ x, y, z });
     this.pending = [];
     this.selfAlive = true;
     this.prevHealth = MAX_HEALTH;
@@ -301,15 +366,29 @@ export class Match {
     });
   }
 
+  /** Bearing from the player's view to a world point (0 = ahead, + = right). */
+  private bearingTo(target: Vec3): number {
+    const f = forwardFromYaw(this.input.yaw);
+    const r = rightFromYaw(this.input.yaw);
+    const rel = { x: target.x - this.predicted.pos.x, z: target.z - this.predicted.pos.z };
+    const along = rel.x * f.x + rel.z * f.z;
+    const side = rel.x * r.x + rel.z * r.z;
+    return Math.atan2(side, along);
+  }
+
   private eye(): Vec3 {
-    return { x: this.predicted.x, y: this.predicted.y + EYE_HEIGHT, z: this.predicted.z };
+    return {
+      x: this.predicted.pos.x,
+      y: this.predicted.pos.y + EYE_HEIGHT,
+      z: this.predicted.pos.z,
+    };
   }
 
   private syncCamera(): void {
     this.world.camera.position.set(
-      this.predicted.x,
-      this.predicted.y + EYE_HEIGHT,
-      this.predicted.z,
+      this.predicted.pos.x,
+      this.predicted.pos.y + EYE_HEIGHT,
+      this.predicted.pos.z,
     );
     this.world.camera.rotation.set(this.input.pitch, this.input.yaw, 0);
   }

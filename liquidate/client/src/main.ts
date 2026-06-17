@@ -2,20 +2,20 @@
  * Client bootstrap and screen flow.
  *
  * Menu → FIND MATCH (networked 1v1 against the authoritative server) or
- * PRACTICE RANGE (M1 solo). Shared resources (renderer, input, weapon, HUD) are
- * built once; the chosen controller drives the frame loop.
+ * PRACTICE RANGE (offline 1v1 vs a bot). Shared resources (renderer, input,
+ * weapon, HUD, audio) are built once; the chosen controller drives the loop.
  */
 
-import { DEFAULT_MAP } from '@liquidate/shared';
+import { DEFAULT_MAP, randomMap } from '@liquidate/shared';
 import { World } from './world';
 import { Input } from './input';
 import { Weapon } from './weapon';
 import { Hud } from './hud';
-import { Game } from './game';
-import { Dummy } from './dummy';
+import { Sfx } from './audio';
 import { Net } from './net';
 import { Opponent } from './opponent';
 import { Match, type MatchResult } from './match';
+import { Practice } from './practice';
 
 declare global {
   interface Window {
@@ -24,12 +24,12 @@ declare global {
   }
 }
 
-const map = DEFAULT_MAP;
 const container = document.getElementById('game') as HTMLElement;
-const world = new World(container, map);
+const world = new World(container);
 const input = new Input(world.domElement);
-const weapon = new Weapon(world.scene, world.camera);
+const gun = new Weapon(world.scene, world.camera);
 const hud = new Hud();
+const sfx = new Sfx();
 
 const overlay = document.getElementById('overlay') as HTMLElement;
 const cardMenu = document.getElementById('card-menu') as HTMLElement;
@@ -60,11 +60,11 @@ document.getElementById('play-again')!.addEventListener('click', () => location.
 resumeHint.addEventListener('click', () => input.requestLock());
 
 function startPractice(): void {
+  sfx.resume();
   mode = 'practice';
-  const dummy = new Dummy(world.scene, map);
-  const game = new Game(map, world, input, weapon, dummy, hud);
-  dummy.avoidProvider = () => game.playerFeet;
-  controller = game;
+  const map = randomMap();
+  world.setMap(map);
+  controller = new Practice(map, world, input, gun, hud, sfx);
   setState('playing');
   showCard(null);
   hud.show(true);
@@ -72,10 +72,11 @@ function startPractice(): void {
 }
 
 function startMatch(): void {
+  sfx.resume();
   mode = 'match';
   const net = new Net();
   const opponent = new Opponent(world.scene);
-  const match = new Match(map, world, input, weapon, hud, net, opponent, {
+  const match = new Match(DEFAULT_MAP, world, input, gun, hud, net, opponent, sfx, {
     onSearching: () => {
       setState('searching');
       showCard(cardSearch);
@@ -115,7 +116,6 @@ function showOver(result: MatchResult): void {
 
 input.onLockChange = (locked) => {
   window.__liq!.locked = locked;
-  // Show a "click to resume" prompt only while actively playing.
   resumeHint.classList.toggle('hidden', !(appState === 'playing' && !locked));
 };
 
@@ -127,9 +127,9 @@ function frame(now: number): void {
 
   if (mode === 'practice') {
     if (input.locked) controller?.update(dt);
-    else weapon.update(dt);
+    else gun.update(dt);
   } else if (mode === 'match') {
-    controller?.update(dt); // Match samples movement only while locked, internally
+    controller?.update(dt);
   }
 
   world.render();
