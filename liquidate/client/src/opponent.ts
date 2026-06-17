@@ -46,6 +46,12 @@ export class Opponent {
     this.scene.add(this.group);
   }
 
+  /** Clear interpolation state between matches and hide the avatar. */
+  reset(): void {
+    this.buffer.length = 0;
+    this.group.visible = false;
+  }
+
   pushFrame(serverTime: number, x: number, z: number, yaw: number, alive: boolean): void {
     this.buffer.push({ t: serverTime, x, z, yaw, alive });
     if (this.buffer.length > MAX_FRAMES) this.buffer.shift();

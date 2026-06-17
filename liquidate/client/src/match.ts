@@ -47,6 +47,10 @@ export interface MatchResult {
   oppLeft: boolean;
   selfScore: number;
   oppScore: number;
+  stake: number;
+  pot: number;
+  rake: number;
+  net: number; // player's net DEMO change for the match
 }
 
 export interface MatchCallbacks {
@@ -88,6 +92,7 @@ export class Match {
   private oppLeft = false;
 
   constructor(
+    selfId: string,
     private map: GameMap,
     private readonly world: World,
     private readonly input: Input,
@@ -98,7 +103,7 @@ export class Match {
     private readonly sfx: Sfx,
     private readonly callbacks: MatchCallbacks,
   ) {
-    this.net.onMessage = (m) => this.handle(m);
+    this.selfId = selfId;
     this.input.onReload = () => {
       this.net.send({ type: 'reload' });
       this.sfx.reload();
@@ -106,15 +111,9 @@ export class Match {
     this.input.onSwitch = (w) => this.net.send({ type: 'switch', weapon: w });
   }
 
-  connect(): void {
-    this.net.connect();
-  }
-
-  private handle(msg: ServerMessage): void {
+  /** Dispatch a server message (called by the app for game-related messages). */
+  handle(msg: ServerMessage): void {
     switch (msg.type) {
-      case 'init':
-        this.selfId = msg.id;
-        break;
       case 'waiting':
         this.callbacks.onSearching();
         break;
@@ -140,7 +139,7 @@ export class Match {
         this.oppLeft = true;
         break;
       case 'over':
-        this.onOver(msg.winner);
+        this.onOver(msg);
         break;
       default:
         break;
@@ -158,6 +157,9 @@ export class Match {
     this.input.pitch = 0;
     this.pending = [];
     this.selfWeapon = DEFAULT_WEAPON;
+    this.opponent.reset();
+    this.over = false;
+    this.oppLeft = false;
     this.playing = true;
     this.syncCamera();
     this.hud.setScores(0, 0);
@@ -354,15 +356,20 @@ export class Match {
     this.syncCamera();
   }
 
-  private onOver(winner: string): void {
+  private onOver(over: Extract<ServerMessage, { type: 'over' }>): void {
     if (this.over) return;
     this.over = true;
     this.playing = false;
+    const win = over.winner === this.selfId;
     this.callbacks.onOver({
-      win: winner === this.selfId,
+      win,
       oppLeft: this.oppLeft,
       selfScore: this.selfScore,
       oppScore: this.oppScore,
+      stake: over.stake,
+      pot: over.pot,
+      rake: over.rake,
+      net: win ? over.stake - over.rake : -over.stake,
     });
   }
 

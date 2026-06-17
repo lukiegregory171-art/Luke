@@ -44,23 +44,44 @@
 
     <!-- Screens overlay -->
     <div id="overlay">
-      <!-- Main menu -->
-      <div class="overlay-card" id="card-menu">
+      <!-- Lobby -->
+      <div class="overlay-card lobby" id="card-menu">
         <h1>LIQUIDATE</h1>
-        <p class="sub">SERVER-AUTHORITATIVE 1V1 · DEMO</p>
-        <div class="btn-row">
-          <button id="find-match">FIND MATCH</button>
-          <button id="practice" class="ghost">PRACTICE RANGE</button>
+        <p class="sub">SERVER-AUTHORITATIVE 1V1 · PLAY-MONEY DEMO</p>
+
+        <!-- Sign in -->
+        <div id="lobby-signin" class="lobby-row">
+          <input id="lobby-handle" maxlength="24" placeholder="choose a handle" />
+          <button id="lobby-login">SIGN IN</button>
         </div>
-        <ul class="controls">
-          <li><b>WASD</b> move</li>
-          <li><b>Mouse</b> look</li>
-          <li><b>Click</b> / hold to fire</li>
-          <li><b>R</b> reload</li>
-          <li><b>Esc</b> release mouse</li>
-          <li><b>First to 3</b> wins</li>
-        </ul>
-        <p class="footnote">No real money — all play-money/DEMO.</p>
+
+        <!-- Account (after sign in) -->
+        <div id="lobby-account" class="hidden">
+          <div class="lobby-acct">
+            <span id="lobby-who">—</span>
+            <span id="lobby-balance" class="balance">—</span>
+          </div>
+          <div id="lobby-stats" class="lobby-stats">—</div>
+
+          <div class="lobby-label">STAKE</div>
+          <div id="lobby-stakes" class="lobby-stakes"></div>
+          <div id="lobby-preview" class="lobby-preview"></div>
+
+          <div class="lobby-bank">
+            <button id="lobby-deposit" class="ghost">DEPOSIT</button>
+            <button id="lobby-withdraw" class="ghost">WITHDRAW</button>
+          </div>
+        </div>
+
+        <div id="lobby-treasury" class="lobby-treasury">House treasury: —</div>
+
+        <div class="btn-row">
+          <button id="lobby-find" disabled>FIND MATCH</button>
+          <button id="lobby-practice" class="ghost">PRACTICE RANGE</button>
+        </div>
+        <p class="footnote">
+          DEMO play-money only — no real funds, deposits, or withdrawals of value.
+        </p>
       </div>
 
       <!-- Searching for opponent -->
@@ -75,7 +96,7 @@
       <div class="overlay-card hidden" id="card-over">
         <h1 class="small" id="over-title">MATCH OVER</h1>
         <p class="sub" id="over-detail"></p>
-        <button id="play-again">FIND NEW MATCH</button>
+        <button id="play-again">BACK TO LOBBY</button>
       </div>
     </div>
 

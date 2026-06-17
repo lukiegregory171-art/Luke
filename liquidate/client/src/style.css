@@ -464,6 +464,109 @@ button.ghost:hover {
   font-size: 0.72rem;
 }
 
+/* --- Lobby ---------------------------------------------------------------- */
+.lobby {
+  width: min(440px, 92vw);
+}
+.lobby-row {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+#lobby-handle {
+  flex: 1;
+  max-width: 240px;
+  background: #05070a;
+  border: 1px solid #1a2530;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+#lobby-handle:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.lobby-acct {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.lobby-acct #lobby-who {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.balance {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1.3rem;
+  text-shadow: 0 0 14px var(--accent-dim);
+}
+.lobby-stats {
+  color: #8aa;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  margin-top: 0.2rem;
+}
+.lobby-label {
+  margin: 1.1rem 0 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.25em;
+  color: #6b7a89;
+}
+.lobby-stakes {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.stake {
+  padding: 0.5rem 1.1rem;
+  border: 1px solid #38505c;
+  background: transparent;
+  color: #9fb2c0;
+  letter-spacing: 0.05em;
+}
+.stake.on {
+  border-color: var(--accent);
+  background: rgba(22, 224, 163, 0.12);
+  color: var(--accent);
+}
+.lobby-preview {
+  margin-top: 0.7rem;
+  font-size: 0.8rem;
+  color: #98a6b4;
+}
+.lobby-preview b {
+  color: var(--text);
+}
+.lobby-preview .good,
+.good {
+  color: var(--accent);
+}
+.lobby-preview .bad,
+.bad {
+  color: var(--danger);
+}
+.lobby-bank {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+.lobby-bank button {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.8rem;
+}
+.lobby-treasury {
+  margin: 1.4rem 0 0.4rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  color: #6b7a89;
+}
+
 .spinner {
   width: 42px;
   height: 42px;
