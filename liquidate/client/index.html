@@ -3,11 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LIQUIDATE — Practice Range</title>
+    <title>LIQUIDATE</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="game"></div>
+
+    <!-- Damage flash (full-screen red vignette) -->
+    <div id="damage"></div>
 
     <!-- HUD overlay (shown while playing) -->
     <div id="hud" class="hidden">
@@ -16,9 +19,18 @@
         ><span class="ch ch-r"></span>
       </div>
       <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
+      <div id="banner"></div>
+
       <div class="hud-top">
-        <span id="score">DUMMIES&nbsp;DROPPED&nbsp;·&nbsp;0</span>
+        <span id="score">0&nbsp;&nbsp;YOU&nbsp;·&nbsp;OPP&nbsp;&nbsp;0</span>
       </div>
+      <div class="hud-topright">PING <span id="latency">0 ms</span></div>
+
+      <div class="hud-bottom-left">
+        <div class="health-bar"><div id="health-fill"></div></div>
+        <div id="health-num">100</div>
+      </div>
+
       <div class="hud-bottom-right">
         <div id="ammo">
           <span id="ammo-cur">30</span><span class="slash">/</span><span id="ammo-max">30</span>
@@ -27,22 +39,45 @@
       </div>
     </div>
 
-    <!-- Start / pause overlay -->
+    <!-- Screens overlay -->
     <div id="overlay">
-      <div class="overlay-card">
+      <!-- Main menu -->
+      <div class="overlay-card" id="card-menu">
         <h1>LIQUIDATE</h1>
-        <p class="sub">PRACTICE&nbsp;RANGE · DEMO</p>
-        <button id="play">CLICK TO PLAY</button>
+        <p class="sub">SERVER-AUTHORITATIVE 1V1 · DEMO</p>
+        <div class="btn-row">
+          <button id="find-match">FIND MATCH</button>
+          <button id="practice" class="ghost">PRACTICE RANGE</button>
+        </div>
         <ul class="controls">
           <li><b>WASD</b> move</li>
           <li><b>Mouse</b> look</li>
           <li><b>Click</b> / hold to fire</li>
           <li><b>R</b> reload</li>
-          <li><b>Esc</b> pause</li>
+          <li><b>Esc</b> release mouse</li>
+          <li><b>First to 3</b> wins</li>
         </ul>
-        <p class="footnote">Solo practice (M1). Real 1v1 duels &amp; the demo economy come next.</p>
+        <p class="footnote">No real money — all play-money/DEMO.</p>
+      </div>
+
+      <!-- Searching for opponent -->
+      <div class="overlay-card hidden" id="card-search">
+        <h1 class="small">FINDING OPPONENT</h1>
+        <div class="spinner"></div>
+        <p class="sub">Open a second tab and click FIND MATCH to duel yourself.</p>
+        <button id="cancel" class="ghost">CANCEL</button>
+      </div>
+
+      <!-- Match over -->
+      <div class="overlay-card hidden" id="card-over">
+        <h1 class="small" id="over-title">MATCH OVER</h1>
+        <p class="sub" id="over-detail"></p>
+        <button id="play-again">FIND NEW MATCH</button>
       </div>
     </div>
+
+    <!-- Click-to-resume hint (shown if the mouse is released mid-match) -->
+    <div id="resume-hint" class="hidden">Click to resume aiming</div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

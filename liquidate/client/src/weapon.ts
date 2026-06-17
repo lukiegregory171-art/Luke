@@ -95,6 +95,11 @@ export class Weapon {
     this.spawnTracer(this.muzzleWorldPosition(), hitPoint);
   }
 
+  /** Render a tracer for another player's shot (world-space origin and endpoint). */
+  spawnWorldTracer(from: Vec3, to: Vec3): void {
+    this.spawnTracer(new THREE.Vector3(from.x, from.y, from.z), to);
+  }
+
   private spawnTracer(from: THREE.Vector3, to: Vec3): void {
     const target = new THREE.Vector3(to.x, to.y, to.z);
     const dir = new THREE.Vector3().subVectors(target, from);
