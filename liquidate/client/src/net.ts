@@ -43,6 +43,11 @@ export class Net {
         this.latency = this.latency === 0 ? rtt : this.latency * 0.8 + rtt * 0.2;
         return;
       }
+      if (msg.type === 'ping') {
+        // The server measures our RTT for lag compensation; echo it back.
+        this.send({ type: 'pong', t: msg.t });
+        return;
+      }
       this.onMessage(msg);
     });
 
