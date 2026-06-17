@@ -9,6 +9,19 @@ export const TICK_DT = 1 / TICK_RATE; // seconds per server tick
 export const SERVER_PORT = 8080; // WebSocket + HTTP port
 /** Hard upper bound on a single input's dt (anti speed-hack). */
 export const MAX_DT = 0.05;
+/** Client renders the opponent this far in the past (entity interpolation). */
+export const INTERP_MS = 100;
+
+// --- Hardening (M6) --------------------------------------------------------
+/** Look/aim pitch is clamped to this (radians) — server-validated. */
+export const PITCH_LIMIT = 1.5;
+/** Max simulated movement time the server will apply to one player per tick
+ *  (anti speed-hack: bounds the effect of input flooding). */
+export const MAX_TICK_DT = 0.05;
+/** Cap on how far back lag compensation will rewind a target (ms). */
+export const MAX_REWIND_MS = 250;
+/** How long a disconnected player may take to reconnect before forfeiting (ms). */
+export const RECONNECT_GRACE_MS = 10000;
 
 // --- Player ----------------------------------------------------------------
 export const PLAYER_RADIUS = 0.4; // horizontal collision radius (units = metres)

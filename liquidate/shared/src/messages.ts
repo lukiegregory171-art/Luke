@@ -68,9 +68,12 @@ export interface WithdrawMessage {
   amount: number;
 }
 
+/** Latency probe. Either side may send `ping`; the receiver echoes `pong` with
+ *  the same `t`. The client measures its RTT; the server measures each
+ *  client's RTT (used by lag compensation). */
 export interface PingMessage {
   type: 'ping';
-  t: number; // client timestamp (ms), echoed back in pong
+  t: number; // sender timestamp (ms), echoed back in pong
 }
 
 export type ClientMessage =
@@ -82,7 +85,8 @@ export type ClientMessage =
   | QueueMessage
   | DepositMessage
   | WithdrawMessage
-  | PingMessage;
+  | PingMessage
+  | PongMessage;
 
 // --- Server -> Client ------------------------------------------------------
 
@@ -213,6 +217,7 @@ export type ServerMessage =
   | OppLeftMessage
   | AccountMessage
   | TreasuryMessage
+  | PingMessage
   | PongMessage;
 
 // --- Helpers ---------------------------------------------------------------
