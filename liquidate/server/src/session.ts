@@ -12,10 +12,11 @@ export interface Session {
   accountId?: string;
   handle?: string;
   stake: number;
+  rtt: number; // measured round-trip latency (ms), used by lag compensation
 }
 
 export function makeSession(conn: Connection): Session {
-  return { conn, stake: 0 };
+  return { conn, stake: 0, rtt: 0 };
 }
 
 /** Push the latest authoritative account state to a connection. */

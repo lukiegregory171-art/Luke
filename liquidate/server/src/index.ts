@@ -16,6 +16,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   DEFAULT_MAP,
   MAPS,
+  RECONNECT_GRACE_MS,
   RESPAWN_DELAY,
   SERVER_PORT,
   TARGET_KILLS,
@@ -31,6 +32,7 @@ import { makeConnection } from './connection';
 import { Matchmaker } from './matchmaker';
 import { Bank } from './bank';
 import { makeSession, sendAccount, sendTreasury } from './session';
+import { log } from './logger';
 
 const PORT = Number(process.env.PORT ?? SERVER_PORT);
 
@@ -38,6 +40,7 @@ const PORT = Number(process.env.PORT ?? SERVER_PORT);
 // deterministic).
 const targetKills = Number(process.env.TARGET_KILLS) || TARGET_KILLS;
 const respawnDelay = Number(process.env.RESPAWN_DELAY) || RESPAWN_DELAY;
+const graceMs = Number(process.env.RECONNECT_GRACE_MS) || RECONNECT_GRACE_MS;
 const forcedMap: GameMap | undefined = process.env.MAP ? MAPS[process.env.MAP] : undefined;
 const pickMap = (): GameMap => forcedMap ?? randomMap();
 const initMap = forcedMap ?? DEFAULT_MAP;
@@ -101,17 +104,21 @@ const httpServer = createServer(serveStatic);
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
 const bank = new Bank(process.env.LIQUIDATE_DB ?? 'data/liquidate.sqlite');
-const matchmaker = new Matchmaker(bank, pickMap, { targetKills, respawnDelay });
+const matchmaker = new Matchmaker(bank, pickMap, { targetKills, respawnDelay }, graceMs);
 
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
   const conn = makeConnection(id, socket);
   const session = makeSession(conn);
-  console.log(`[ws] connected ${id}`);
+  log.info('ws_connect', { conn: id });
 
   const init: InitMessage = { type: 'init', id, tickRate: TICK_RATE, map: initMap };
   socket.send(encode(init));
   sendTreasury(conn, bank);
+
+  // Server-measured RTT (for lag compensation): ping the client periodically and
+  // time the pong.
+  const rttTimer = setInterval(() => conn.send({ type: 'ping', t: Date.now() }), 1000);
 
   socket.on('message', (raw) => {
     let msg: ClientMessage;
@@ -125,10 +132,17 @@ wss.on('connection', (socket: WebSocket) => {
       case 'ping':
         conn.send({ type: 'pong', t: msg.t });
         return;
+      case 'pong': {
+        const rtt = Date.now() - msg.t;
+        session.rtt = session.rtt === 0 ? rtt : session.rtt * 0.8 + rtt * 0.2;
+        return;
+      }
       case 'login': {
         const acct = bank.loginOrCreate(msg.handle);
         session.accountId = acct.id;
         session.handle = acct.handle;
+        log.info('login', { conn: id, account: acct.id, handle: acct.handle });
+        matchmaker.tryReconnect(session); // resume a paused match, if any
         sendAccount(conn, bank, acct.id);
         sendTreasury(conn, bank);
         return;
@@ -156,21 +170,22 @@ wss.on('connection', (socket: WebSocket) => {
   });
 
   socket.on('close', () => {
-    console.log(`[ws] disconnected ${id}`);
+    clearInterval(rttTimer);
+    log.info('ws_disconnect', { conn: id });
     matchmaker.remove(session);
   });
 
   socket.on('error', (err) => {
-    console.error(`[ws] error ${id}:`, err.message);
+    log.error('ws_error', { conn: id, message: err.message });
   });
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`[liquidate] server listening on http://localhost:${PORT} (tick ${TICK_RATE}Hz)`);
+  log.info('listening', { port: PORT, tickRate: TICK_RATE });
 });
 
 function shutdown(): void {
-  console.log('[liquidate] shutting down');
+  log.info('shutdown');
   wss.close();
   httpServer.close(() => process.exit(0));
   // Failsafe if connections linger.

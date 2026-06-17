@@ -17,6 +17,7 @@ import { WebSocket } from 'ws';
 import {
   EYE_HEIGHT,
   HEAD_SPHERE,
+  PITCH_LIMIT,
   STARTING_BALANCE,
   aimAngles,
   decode,
@@ -151,12 +152,19 @@ class TestClient {
 
 let handleSeq = 0;
 
-async function connect(stake: number): Promise<TestClient> {
-  const c = new TestClient();
+async function login(c: TestClient, handle: string): Promise<void> {
   await c.open();
   await c.waitUntil(() => c.id !== '');
-  c.send({ type: 'login', handle: `p${++handleSeq}_${Date.now()}` });
+  c.send({ type: 'login', handle });
   await c.waitUntil(() => c.lastAccount() !== undefined);
+}
+
+async function connect(
+  stake: number,
+  handle = `p${++handleSeq}_${Date.now()}`,
+): Promise<TestClient> {
+  const c = new TestClient();
+  await login(c, handle);
   c.send({ type: 'queue', stake });
   return c;
 }
@@ -191,6 +199,7 @@ beforeAll(async () => {
       RESPAWN_DELAY: '0.2',
       MAP: 'crossfire',
       LIQUIDATE_DB: ':memory:',
+      RECONNECT_GRACE_MS: '600',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -264,8 +273,13 @@ describe('LIQUIDATE multiplayer (integration)', () => {
     expect(shooter.count('hit')).toBe(hitsBefore); // ...but cover blocked it
     expect(shooter.snapOf(victim.id)?.health).toBe(100); // victim untouched
 
-    // --- Movement: strafe +X (yaw = -PI/2 makes "forward" point +X) for line of sight.
-    for (let i = 0; i < 80; i++) shooter.input({ moveFwd: 1, yaw: -Math.PI / 2 });
+    // --- Movement: strafe +X (yaw = -PI/2 makes "forward" point +X) for line of
+    // sight. Inputs are PACED (like a real client) so the anti-cheat per-tick
+    // movement budget doesn't clamp them.
+    for (let i = 0; i < 300 && (shooter.snapOf(shooter.id)?.x ?? 0) < 5.5; i++) {
+      shooter.input({ moveFwd: 1, yaw: -Math.PI / 2 });
+      await delay(12);
+    }
     await shooter.waitUntil(() => (shooter.snapOf(shooter.id)?.x ?? 0) > 4);
     expect(shooter.lastAck(shooter.id)).toBe(shooter.seq); // server acked our inputs
 
@@ -325,15 +339,66 @@ describe('LIQUIDATE multiplayer (integration)', () => {
     expect(winnerNet + loserNet + shooter.lastTreasury()).toBe(0);
   });
 
-  it('forfeits the match to the opponent on disconnect', async () => {
+  it('grants a reconnection grace before forfeiting on disconnect', async () => {
     const { a, b } = await connectPair();
     open.push(a);
 
     b.close(); // opponent drops
+    await delay(200); // less than the 600ms grace
+    expect(a.count('over')).toBe(0); // not forfeited yet — grace window
 
-    await a.waitUntil(() => a.count('over') > 0);
+    await a.waitUntil(() => a.count('over') > 0, 3000); // ...forfeits after grace
     expect(a.count('oppLeft')).toBeGreaterThan(0);
     const over = a.of('over')[0] as OverMessage;
     expect(over.winner).toBe(a.id);
+  });
+
+  it('resumes the match when a dropped player reconnects within grace', async () => {
+    const handle = `recon_${Date.now()}`;
+    const a = await connect(0);
+    const b = await connect(0, handle);
+    open.push(a);
+    await a.waitUntil(() => a.count('start') > 0);
+    await b.waitUntil(() => b.count('start') > 0);
+
+    b.close(); // drop
+    await delay(150); // within grace
+
+    // Reconnect with the same handle/account.
+    const b2 = new TestClient();
+    open.push(b2);
+    await login(b2, handle);
+    await b2.waitUntil(() => b2.count('start') > 0); // resumed into the match
+    await delay(250);
+    expect(a.count('over')).toBe(0); // no forfeit — the match continued
+  });
+
+  it('bounds movement from flooded inputs (anti speed-hack)', async () => {
+    const { a, b, shooter } = await connectPair(0);
+    open.push(a, b);
+    // Fire 400 inputs in one burst at the max dt; without the per-tick budget
+    // this would cross the whole arena.
+    for (let i = 0; i < 400; i++) {
+      shooter.seq++;
+      shooter.send({
+        type: 'input',
+        seq: shooter.seq,
+        dt: 0.05,
+        moveFwd: 1,
+        moveRight: 0,
+        yaw: -Math.PI / 2,
+        pitch: 0,
+      });
+    }
+    await delay(250);
+    expect(shooter.snapOf(shooter.id)!.x).toBeLessThan(3); // movement was bounded
+  });
+
+  it('clamps impossible view angles', async () => {
+    const { a, b, shooter } = await connectPair(0);
+    open.push(a, b);
+    shooter.input({ yaw: 0, pitch: 999 });
+    await delay(150);
+    expect(Math.abs(shooter.snapOf(shooter.id)!.pitch)).toBeLessThanOrEqual(PITCH_LIMIT + 1e-6);
   });
 });

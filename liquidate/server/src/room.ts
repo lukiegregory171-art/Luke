@@ -3,24 +3,44 @@
  * player's inputs with the SHARED movement code, resolves fires with the SHARED
  * occluded hitscan, tracks health/ammo/score, and broadcasts snapshots at the
  * fixed tick rate. Clients are never trusted for position, hits, or outcome.
+ *
+ * M6 hardening:
+ *  - Lag compensation ("favor the shooter"): per-player position history is kept
+ *    and a shot is resolved against where the target was at the shooter's view
+ *    time (now - rtt/2 - interpolation), clamped to MAX_REWIND_MS.
+ *  - Anti-cheat sanity checks: per-tick simulated-movement budget (bounds input
+ *    flooding), view-angle clamping/validation, and the existing server-side
+ *    fire-rate/ammo/reload + dt clamp. These reject impossible *inputs*. They do
+ *    NOT and cannot detect aimbots — a bot that aims perfectly sends legal
+ *    inputs. See `cheatFlags`.
+ *  - Reconnection: a dropped player pauses the match for a grace period
+ *    (orchestrated by the matchmaker) and can rebind to resume.
  */
 
 import {
   DEFAULT_WEAPON,
   EYE_HEIGHT,
+  INTERP_MS,
   MAX_HEALTH,
+  MAX_REWIND_MS,
+  MAX_TICK_DT,
+  PITCH_LIMIT,
   TICK_DT,
   WEAPONS,
   WEAPON_SWITCH_TIME,
   aimDirection,
+  clamp,
+  clampDt,
   hitscan,
   hurtboxes,
   makeMoveState,
   perturbDirection,
   rakeOf,
+  sampleHistory,
   stepMovement,
   type ClientMessage,
   type GameMap,
+  type HistorySample,
   type InputMessage,
   type MoveState,
   type OverMessage,
@@ -29,15 +49,19 @@ import {
   type WeaponId,
 } from '@liquidate/shared';
 import type { Connection } from './connection';
+import { log } from './logger';
 
 export interface RoomOptions {
   targetKills: number;
   respawnDelay: number;
 }
 
+const HISTORY_MS = 1000;
+
 interface PlayerSim {
   conn: Connection;
   spawnIndex: 0 | 1;
+  connected: boolean;
   move: MoveState;
   yaw: number;
   pitch: number;
@@ -52,6 +76,8 @@ interface PlayerSim {
   score: number;
   lastProcessedSeq: number;
   queue: ClientMessage[];
+  history: HistorySample[];
+  cheatFlags: number; // count of rejected/clamped impossible inputs
 }
 
 function fullAmmo(): Record<WeaponId, number> {
@@ -71,6 +97,7 @@ export class Room {
     private readonly map: GameMap,
     private readonly opts: RoomOptions,
     private readonly stake: number,
+    private readonly latencyOf: (connId: string) => number,
     private readonly onResult: (
       winnerConnId: string | null,
       scores: Record<string, number>,
@@ -85,6 +112,7 @@ export class Room {
     return {
       conn,
       spawnIndex,
+      connected: true,
       move: makeMoveState(spawn.pos),
       yaw: spawn.yaw,
       pitch: 0,
@@ -99,25 +127,25 @@ export class Room {
       score: 0,
       lastProcessedSeq: 0,
       queue: [],
+      history: [],
+      cheatFlags: 0,
     };
   }
 
   start(): void {
-    this.p0.conn.send({
+    this.sendStart(this.p0);
+    this.sendStart(this.p1);
+    this.resume();
+  }
+
+  private sendStart(p: PlayerSim): void {
+    p.conn.send({
       type: 'start',
-      opponentId: this.p1.conn.id,
-      selfSpawnIndex: 0,
+      opponentId: this.opponentOf(p).conn.id,
+      selfSpawnIndex: p.spawnIndex,
       map: this.map,
       stake: this.stake,
     });
-    this.p1.conn.send({
-      type: 'start',
-      opponentId: this.p0.conn.id,
-      selfSpawnIndex: 1,
-      map: this.map,
-      stake: this.stake,
-    });
-    this.interval = setInterval(() => this.tick(), TICK_DT * 1000);
   }
 
   /** Queue an in-match message from a player. */
@@ -135,29 +163,79 @@ export class Room {
     }
   }
 
-  /** A player dropped: the opponent wins by forfeit. */
-  handleDisconnect(conn: Connection): void {
-    if (this.over) return;
-    const leaver = this.playerFor(conn);
-    if (!leaver) return;
-    const opp = this.opponentOf(leaver);
-    this.over = true;
-    if (opp.conn.isOpen()) {
-      opp.conn.send({ type: 'oppLeft' });
-      opp.conn.send(this.overMessage(opp.conn.id));
-    }
-    this.cleanup(opp.conn.id);
+  // --- Reconnection (orchestrated by the matchmaker) ------------------------
+
+  slotOf(connId: string): 0 | 1 | null {
+    if (connId === this.p0.conn.id) return 0;
+    if (connId === this.p1.conn.id) return 1;
+    return null;
   }
+
+  /** Pause the match because a player dropped (awaiting reconnect or forfeit). */
+  markDisconnected(slot: 0 | 1): void {
+    (slot === 0 ? this.p0 : this.p1).connected = false;
+    this.pause();
+    log.info('match_paused', { reason: 'disconnect', slot });
+  }
+
+  /** Rebind a reconnecting player to a fresh connection and resume. */
+  rebind(slot: 0 | 1, conn: Connection): void {
+    if (this.over) return;
+    const p = slot === 0 ? this.p0 : this.p1;
+    p.conn = conn;
+    p.connected = true;
+    p.queue.length = 0;
+    this.sendStart(p);
+    this.resume();
+    log.info('match_resumed', { slot });
+  }
+
+  /** Forfeit: the given slot loses; the opponent wins. */
+  forfeit(slot: 0 | 1): void {
+    if (this.over) return;
+    const loser = slot === 0 ? this.p0 : this.p1;
+    const winner = this.opponentOf(loser);
+    this.over = true;
+    if (winner.conn.isOpen()) {
+      winner.conn.send({ type: 'oppLeft' });
+      winner.conn.send(this.overMessage(winner.conn.id));
+    }
+    log.info('match_forfeit', { winner: winner.conn.id, loser: loser.conn.id });
+    this.cleanup(winner.conn.id);
+  }
+
+  private pause(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = undefined;
+    }
+  }
+
+  private resume(): void {
+    if (this.over || this.interval) return;
+    this.interval = setInterval(() => this.tick(), TICK_DT * 1000);
+  }
+
+  // --- Simulation -----------------------------------------------------------
 
   private tick(): void {
     if (this.over) return;
+    const now = Date.now();
     for (const p of [this.p0, this.p1]) {
       this.advanceTimers(p, TICK_DT);
       this.drain(p);
       if (this.over) return; // a fire may have ended the match
     }
+    this.recordHistory(now);
     this.tickCount++;
-    this.broadcastSnapshot();
+    this.broadcastSnapshot(now);
+  }
+
+  private recordHistory(now: number): void {
+    for (const p of [this.p0, this.p1]) {
+      p.history.push({ t: now, x: p.move.pos.x, z: p.move.pos.z });
+      while (p.history.length > 1 && p.history[0].t < now - HISTORY_MS) p.history.shift();
+    }
   }
 
   private advanceTimers(p: PlayerSim, dt: number): void {
@@ -176,32 +254,47 @@ export class Room {
   }
 
   private drain(p: PlayerSim): void {
+    // Anti-cheat: bound the total simulated movement time applied per tick so a
+    // client cannot move faster by flooding inputs.
+    let budget = MAX_TICK_DT;
     for (const msg of p.queue) {
-      if (msg.type === 'input') this.applyInput(p, msg);
-      else if (msg.type === 'fire') this.fire(p, this.opponentOf(p));
-      else if (msg.type === 'reload') this.startReload(p);
-      else if (msg.type === 'switch') this.switchWeapon(p, msg.weapon);
+      if (msg.type === 'input') {
+        const want = clampDt(msg.dt);
+        const allowed = Math.min(want, budget);
+        this.applyInput(p, msg, allowed);
+        if (allowed < want) p.cheatFlags++; // input-flood / oversized dt
+        budget = Math.max(0, budget - allowed);
+      } else if (msg.type === 'fire') {
+        this.fire(p, this.opponentOf(p));
+      } else if (msg.type === 'reload') {
+        this.startReload(p);
+      } else if (msg.type === 'switch') {
+        this.switchWeapon(p, msg.weapon);
+      }
       if (this.over) break;
     }
     p.queue.length = 0;
+    if (p.cheatFlags > 0 && p.cheatFlags % 60 === 0) {
+      log.warn('anticheat_flags', { conn: p.conn.id, flags: p.cheatFlags });
+    }
   }
 
-  private applyInput(p: PlayerSim, msg: InputMessage): void {
-    p.yaw = msg.yaw;
-    p.pitch = msg.pitch;
-    if (p.alive) {
+  private applyInput(p: PlayerSim, msg: InputMessage, dt: number): void {
+    // View-angle validation (server-authoritative): finite yaw, clamped pitch.
+    if (Number.isFinite(msg.yaw)) p.yaw = msg.yaw;
+    if (Number.isFinite(msg.pitch)) {
+      const clamped = clamp(msg.pitch, -PITCH_LIMIT, PITCH_LIMIT);
+      if (clamped !== msg.pitch) p.cheatFlags++;
+      p.pitch = clamped;
+    }
+    if (p.alive && dt > 0) {
       p.move = stepMovement(
         p.move,
-        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: msg.yaw, dash: msg.dash },
-        msg.dt,
+        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: p.yaw, dash: msg.dash },
+        dt,
         this.map,
       );
     }
-    // LIMITATION: the server processes every queued input, but does not yet bound
-    // how many a client may submit per tick. A client that floods inputs could
-    // move faster than intended (an input-count speed-hack). The per-input dt is
-    // clamped (MAX_DT), but the per-tick count is not — addressed in M6's
-    // anti-cheat sanity checks.
     p.lastProcessedSeq = msg.seq;
   }
 
@@ -233,7 +326,13 @@ export class Room {
     this.broadcast({ type: 'fire', id: shooter.conn.id, weapon: shooter.weapon, origin: eye, dir });
 
     if (target.alive) {
-      const box = hurtboxes(target.move.pos);
+      // Lag compensation: resolve against where the target was on the shooter's
+      // screen (now - rtt/2 - interpolation), clamped.
+      const lag = clamp(this.latencyOf(shooter.conn.id) / 2 + INTERP_MS, 0, MAX_REWIND_MS);
+      const past = sampleHistory(target.history, Date.now() - lag);
+      const feet: Vec3 = past ? { x: past.x, y: 0, z: past.z } : target.move.pos;
+      const box = hurtboxes(feet);
+
       let damage = 0;
       let headshot = false;
       for (let i = 0; i < w.pellets; i++) {
@@ -290,6 +389,7 @@ export class Room {
     p.reloadTimer = 0;
     p.fireCooldown = 0;
     p.alive = true;
+    p.history.length = 0; // don't lag-comp across a teleport
     this.broadcast({
       type: 'respawn',
       id: p.conn.id,
@@ -304,6 +404,7 @@ export class Room {
     if (this.over) return;
     this.over = true;
     this.broadcast(this.overMessage(winnerId));
+    log.info('match_over', { winner: winnerId, scores: this.scores() });
     this.cleanup(winnerId);
   }
 
@@ -320,20 +421,17 @@ export class Room {
   }
 
   private cleanup(winnerConnId: string | null): void {
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = undefined;
-    }
+    this.pause();
     this.onResult(winnerConnId, this.scores());
   }
 
-  private broadcastSnapshot(): void {
+  private broadcastSnapshot(now: number): void {
     const players: PlayerSnapshot[] = [this.snapshotOf(this.p0), this.snapshotOf(this.p1)];
     const ack: Record<string, number> = {
       [this.p0.conn.id]: this.p0.lastProcessedSeq,
       [this.p1.conn.id]: this.p1.lastProcessedSeq,
     };
-    this.broadcast({ type: 'snap', tick: this.tickCount, serverTime: Date.now(), ack, players });
+    this.broadcast({ type: 'snap', tick: this.tickCount, serverTime: now, ack, players });
   }
 
   private snapshotOf(p: PlayerSim): PlayerSnapshot {
@@ -361,8 +459,8 @@ export class Room {
   }
 
   private broadcast(msg: Parameters<Connection['send']>[0]): void {
-    this.p0.conn.send(msg);
-    this.p1.conn.send(msg);
+    if (this.p0.connected) this.p0.conn.send(msg);
+    if (this.p1.connected) this.p1.conn.send(msg);
   }
 
   private playerFor(conn: Connection): PlayerSim | undefined {
