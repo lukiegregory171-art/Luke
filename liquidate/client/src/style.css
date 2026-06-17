@@ -567,6 +567,55 @@ button.ghost:hover {
   color: #6b7a89;
 }
 
+/* Skins / wallet (M5) */
+.skins {
+  display: flex;
+  gap: 0.55rem;
+  justify-content: center;
+}
+.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+.swatch.sel {
+  border-color: #fff;
+}
+.swatch.locked {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.swatch.locked::after {
+  content: '🔒';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+}
+.wallet {
+  margin-top: 0.9rem;
+}
+.wallet #wallet-addr {
+  flex: 1;
+  max-width: 230px;
+  background: #05070a;
+  border: 1px solid #1a2530;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+}
+.wallet-status {
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: #6b7a89;
+}
+
 .spinner {
   width: 42px;
   height: 42px;

@@ -8,7 +8,13 @@
  * once. All play-money is server-authoritative DEMO currency.
  */
 
-import { DEFAULT_MAP, randomMap, type ServerMessage } from '@liquidate/shared';
+import {
+  DEFAULT_MAP,
+  SKINS,
+  isSkinUnlocked,
+  randomMap,
+  type ServerMessage,
+} from '@liquidate/shared';
 import { World } from './world';
 import { Input } from './input';
 import { Weapon } from './weapon';
@@ -19,6 +25,8 @@ import { Opponent } from './opponent';
 import { Match, type MatchResult } from './match';
 import { Practice } from './practice';
 import { Lobby } from './lobby';
+import { applySkin, savedSkin } from './cosmetics';
+import { TOKEN_ENABLED, connectPhantom, fetchTokenBalance } from './token';
 
 declare global {
   interface Window {
@@ -171,6 +179,63 @@ input.onLockChange = (locked) => {
   window.__liq!.locked = locked;
   resumeHint.classList.toggle('hidden', !(appState === 'playing' && !locked));
 };
+
+// --- Cosmetics (M5: skins, optionally devnet-token gated) ------------------
+let tokenBalance = 0;
+let selectedSkin = savedSkin();
+applySkin(selectedSkin);
+
+const skinsEl = document.getElementById('skins') as HTMLElement;
+function renderSkins(): void {
+  skinsEl.innerHTML = '';
+  for (const skin of SKINS) {
+    const unlocked = isSkinUnlocked(skin, tokenBalance);
+    const b = document.createElement('button');
+    b.className =
+      'swatch' + (skin.id === selectedSkin.id ? ' sel' : '') + (unlocked ? '' : ' locked');
+    b.style.background = skin.color;
+    b.title = unlocked ? skin.name : `${skin.name} — needs ${skin.requires} devnet token`;
+    if (unlocked) {
+      b.addEventListener('click', () => {
+        selectedSkin = skin;
+        applySkin(skin);
+        renderSkins();
+      });
+    }
+    skinsEl.appendChild(b);
+  }
+}
+renderSkins();
+
+if (TOKEN_ENABLED) {
+  const wallet = document.getElementById('wallet') as HTMLElement;
+  const status = document.getElementById('wallet-status') as HTMLElement;
+  const addr = document.getElementById('wallet-addr') as HTMLInputElement;
+  wallet.classList.remove('hidden');
+
+  async function loadBalance(address: string): Promise<void> {
+    status.textContent = 'Reading devnet balance…';
+    try {
+      tokenBalance = await fetchTokenBalance(address);
+      status.textContent = `Devnet token balance: ${tokenBalance} (cosmetic only)`;
+      renderSkins();
+    } catch {
+      status.textContent = 'Could not read devnet balance.';
+    }
+  }
+  document.getElementById('wallet-connect')!.addEventListener('click', async () => {
+    const pk = await connectPhantom();
+    if (pk) {
+      addr.value = pk;
+      await loadBalance(pk);
+    } else {
+      status.textContent = 'No Phantom wallet found — paste a devnet address instead.';
+    }
+  });
+  document.getElementById('wallet-check')!.addEventListener('click', () => {
+    if (addr.value.trim()) void loadBalance(addr.value.trim());
+  });
+}
 
 // --- Frame loop ------------------------------------------------------------
 let last = performance.now();
