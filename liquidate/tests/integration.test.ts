@@ -47,8 +47,11 @@ class TestClient {
   readonly messages: ServerMessage[] = [];
   id = '';
   seq = 0;
-  private waiters: { pred: () => boolean; resolve: () => void; timer: ReturnType<typeof setTimeout> }[] =
-    [];
+  private waiters: {
+    pred: () => boolean;
+    resolve: () => void;
+    timer: ReturnType<typeof setTimeout>;
+  }[] = [];
 
   constructor() {
     this.ws = new WebSocket(URL_WS);
@@ -95,9 +98,7 @@ class TestClient {
   }
 
   of<T extends ServerMessage['type']>(type: T): Extract<ServerMessage, { type: T }>[] {
-    return this.messages.filter(
-      (m): m is Extract<ServerMessage, { type: T }> => m.type === type,
-    );
+    return this.messages.filter((m): m is Extract<ServerMessage, { type: T }> => m.type === type);
   }
 
   count(type: ServerMessage['type']): number {
@@ -261,9 +262,7 @@ describe('LIQUIDATE multiplayer (integration)', () => {
     expect(headshots.length).toBeGreaterThan(0);
 
     // --- Respawn: the victim comes back at its own spawn.
-    await shooter.waitUntil(
-      () => shooter.of('respawn').some((r) => r.id === victim.id),
-    );
+    await shooter.waitUntil(() => shooter.of('respawn').some((r) => r.id === victim.id));
     await shooter.waitUntil(() => shooter.snapOf(victim.id)?.alive === true);
     const respawned = shooter.snapOf(victim.id)!;
     expect(Math.abs(respawned.z - victimFeet.z)).toBeLessThan(1);

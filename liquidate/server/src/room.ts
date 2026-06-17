@@ -229,7 +229,14 @@ export class Room {
     p.reloadTimer = 0;
     p.fireCooldown = 0;
     p.alive = true;
-    this.broadcast({ type: 'respawn', id: p.conn.id, x: p.feet.x, y: p.feet.y, z: p.feet.z, yaw: p.yaw });
+    this.broadcast({
+      type: 'respawn',
+      id: p.conn.id,
+      x: p.feet.x,
+      y: p.feet.y,
+      z: p.feet.z,
+      yaw: p.yaw,
+    });
   }
 
   private endMatch(winnerId: string): void {
