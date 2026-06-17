@@ -36,8 +36,9 @@ the browser:
    Browser** (use a real browser tab, not the in-editor preview, so pointer lock
    works). If it doesn't open automatically, use the **Ports** tab and open the
    `5173` URL.
-4. Click **CLICK TO PLAY** to lock the mouse. **WASD** to move, **mouse** to
-   aim, **click/hold** to fire, **R** to reload, **Esc** to pause.
+4. Click **FIND MATCH** (online 1v1 — open a second tab and click FIND MATCH to
+   duel yourself) or **PRACTICE RANGE** (solo). **WASD** move, **mouse** aim,
+   **click/hold** fire, **R** reload, **Esc** release the mouse.
 
 Only port 5173 is exposed: the Vite client proxies the game's WebSocket (`/ws`)
 to the internal Node server, so a single forwarded port is all you need. The
@@ -53,10 +54,14 @@ npm install
 npm run dev      # starts the server (:8080) and the Vite client (:5173)
 ```
 
-Open <http://localhost:5173> and click **CLICK TO PLAY**. You're in the solo
-practice range: **WASD** move, **mouse** aim, **click/hold** to fire, **R**
-reload, **Esc** to pause. (The `npm run dev` server is still started for the M0
-handshake and upcoming multiplayer, but M1 gameplay is fully client-side.)
+Open <http://localhost:5173>. Controls: **WASD** move, **mouse** aim,
+**click/hold** fire, **R** reload, **Esc** release the mouse.
+
+- **FIND MATCH** — queue for an online 1v1. **Open a second tab** (or share the
+  URL) and click FIND MATCH there too; the two clients are matched and you duel,
+  first to 3 kills. Everything (movement, hits, score, winner) is decided by the
+  authoritative server.
+- **PRACTICE RANGE** — the offline solo target range (M1).
 
 Other commands:
 
@@ -115,11 +120,29 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
 - Runtime-verified headless (WebGL renders, no console errors) and the solo
   game logic (firing, occlusion, ammo/reload) is unit-tested.
 
+### Done (M2 — Authoritative multiplayer)
+
+- Matchmaking queue pairs two players into a 1v1 **Room** that runs the 30 Hz
+  authoritative sim; the menu now offers **FIND MATCH** (online) and
+  **PRACTICE RANGE** (the M1 solo mode).
+- **Server authority**: inputs are integrated with the shared movement code,
+  fires resolved with the shared occluded hitscan, and fire-rate / ammo /
+  reload / health / score / outcome all decided server-side. Clients only send
+  inputs.
+- **Client-side prediction + reconciliation** for the local player (snap to the
+  server position, replay unacked inputs) and **entity interpolation** (~100 ms)
+  for the opponent.
+- Server `fire`/`hit`/`kill`/`respawn`/`over`/`oppLeft` events drive tracers,
+  hitmarkers, a damage flash, a kill banner, scores, respawns, and the
+  match-over screen. First to 3 kills wins; disconnect forfeits to the opponent.
+  Live **ping** readout from ping/pong.
+- **Headless integration test** boots the real server and drives two scripted
+  WebSocket clients through a full match (matchmaking → movement+acks → a shot
+  blocked by cover → headshots → kill → respawn → second kill → winner) and a
+  forfeit case. Verified two real browser tabs matchmake and exchange snapshots.
+
 ### Not done yet
 
-- **M2** — matchmaking, rooms, prediction/reconciliation, opponent
-  interpolation, server-side occluded hitscan, kills/respawn/scores,
-  match-over + forfeit, latency display, headless integration test.
 - **M3** — practice bot, second map, second weapon, movement polish, hit
   feedback, kill feed, audio.
 - **M4** — accounts + stats (SQLite), play-money balance, stake/pot/rake/treasury
