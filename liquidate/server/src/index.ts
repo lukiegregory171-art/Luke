@@ -29,6 +29,8 @@ import {
 } from '@liquidate/shared';
 import { makeConnection } from './connection';
 import { Matchmaker } from './matchmaker';
+import { Bank } from './bank';
+import { makeSession, sendAccount, sendTreasury } from './session';
 
 const PORT = Number(process.env.PORT ?? SERVER_PORT);
 
@@ -98,16 +100,18 @@ const httpServer = createServer(serveStatic);
 // HTTP static serving, and so a dev proxy (Vite) can forward just this path.
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-const matchmaker = new Matchmaker(pickMap, { targetKills, respawnDelay });
+const bank = new Bank(process.env.LIQUIDATE_DB ?? 'data/liquidate.sqlite');
+const matchmaker = new Matchmaker(bank, pickMap, { targetKills, respawnDelay });
 
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
   const conn = makeConnection(id, socket);
+  const session = makeSession(conn);
   console.log(`[ws] connected ${id}`);
 
   const init: InitMessage = { type: 'init', id, tickRate: TICK_RATE, map: initMap };
   socket.send(encode(init));
-  matchmaker.add(conn);
+  sendTreasury(conn, bank);
 
   socket.on('message', (raw) => {
     let msg: ClientMessage;
@@ -117,16 +121,43 @@ wss.on('connection', (socket: WebSocket) => {
       return; // ignore malformed input
     }
 
-    if (msg.type === 'ping') {
-      conn.send({ type: 'pong', t: msg.t });
-      return;
+    switch (msg.type) {
+      case 'ping':
+        conn.send({ type: 'pong', t: msg.t });
+        return;
+      case 'login': {
+        const acct = bank.loginOrCreate(msg.handle);
+        session.accountId = acct.id;
+        session.handle = acct.handle;
+        sendAccount(conn, bank, acct.id);
+        sendTreasury(conn, bank);
+        return;
+      }
+      case 'deposit':
+        if (session.accountId) {
+          bank.deposit(session.accountId, msg.amount);
+          sendAccount(conn, bank, session.accountId);
+          sendTreasury(conn, bank);
+        }
+        return;
+      case 'withdraw':
+        if (session.accountId) {
+          bank.withdraw(session.accountId, msg.amount);
+          sendAccount(conn, bank, session.accountId);
+          sendTreasury(conn, bank);
+        }
+        return;
+      case 'queue':
+        matchmaker.enqueue(session, msg.stake);
+        return;
+      default:
+        matchmaker.route(conn, msg);
     }
-    matchmaker.route(conn, msg);
   });
 
   socket.on('close', () => {
     console.log(`[ws] disconnected ${id}`);
-    matchmaker.remove(conn);
+    matchmaker.remove(session);
   });
 
   socket.on('error', (err) => {

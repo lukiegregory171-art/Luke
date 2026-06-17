@@ -17,9 +17,12 @@ import { WebSocket } from 'ws';
 import {
   EYE_HEIGHT,
   HEAD_SPHERE,
+  STARTING_BALANCE,
   aimAngles,
   decode,
+  rakeOf,
   sub,
+  type AccountMessage,
   type GameMap,
   type HitEvent,
   type OverMessage,
@@ -131,31 +134,48 @@ class TestClient {
     });
   }
 
+  lastAccount(): AccountMessage | undefined {
+    const a = this.of('account');
+    return a.length ? a[a.length - 1] : undefined;
+  }
+
+  lastTreasury(): number {
+    const t = this.of('treasury');
+    return t.length ? t[t.length - 1].balance : 0;
+  }
+
   close(): void {
     this.ws.close();
   }
 }
 
-async function connectPair(): Promise<{
+let handleSeq = 0;
+
+async function connect(stake: number): Promise<TestClient> {
+  const c = new TestClient();
+  await c.open();
+  await c.waitUntil(() => c.id !== '');
+  c.send({ type: 'login', handle: `p${++handleSeq}_${Date.now()}` });
+  await c.waitUntil(() => c.lastAccount() !== undefined);
+  c.send({ type: 'queue', stake });
+  return c;
+}
+
+async function connectPair(stake = 0): Promise<{
   a: TestClient;
   b: TestClient;
   map: GameMap;
   shooter: TestClient;
   victim: TestClient;
 }> {
-  const a = new TestClient();
-  await a.open();
-  await a.waitUntil(() => a.id !== '');
-  const b = new TestClient();
-  await b.open();
-  await b.waitUntil(() => b.id !== '');
+  const a = await connect(stake);
+  const b = await connect(stake);
 
   await a.waitUntil(() => a.count('start') > 0);
   await b.waitUntil(() => b.count('start') > 0);
 
-  const init = a.of('init')[0];
-  const map = init.map;
   const aStart = a.of('start')[0] as StartMessage;
+  const map = aStart.map;
   const shooter = aStart.selfSpawnIndex === 0 ? a : b;
   const victim = shooter === a ? b : a;
   return { a, b, map, shooter, victim };
@@ -170,6 +190,7 @@ beforeAll(async () => {
       TARGET_KILLS: '2',
       RESPAWN_DELAY: '0.2',
       MAP: 'crossfire',
+      LIQUIDATE_DB: ':memory:',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -216,8 +237,13 @@ describe('LIQUIDATE multiplayer (integration)', () => {
   });
 
   it('runs a full match: movement, occlusion, headshots, respawn, winner', async () => {
-    const { a, b, map, shooter, victim } = await connectPair();
+    const STAKE = 100;
+    const { a, b, map, shooter, victim } = await connectPair(STAKE);
     open.push(a, b);
+
+    // Stakes are escrowed at match start: both balances drop by the stake.
+    await shooter.waitUntil(() => shooter.lastAccount()?.balance === STARTING_BALANCE - STAKE);
+    await victim.waitUntil(() => victim.lastAccount()?.balance === STARTING_BALANCE - STAKE);
 
     const spawn0 = map.spawns[0].pos; // shooter spawn (-Z end)
     const victimFeet = map.spawns[1].pos; // victim stays at its spawn (+Z end)
@@ -282,6 +308,21 @@ describe('LIQUIDATE multiplayer (integration)', () => {
     const over = shooter.of('over')[0] as OverMessage;
     expect(over.winner).toBe(shooter.id);
     expect(over.scores[shooter.id]).toBe(2);
+
+    // --- Economy: pot = 2*stake, 1% rake, winner credited net, loser debited.
+    const pot = STAKE * 2;
+    const rake = rakeOf(pot);
+    expect(over.pot).toBe(pot);
+    expect(over.rake).toBe(rake);
+    await shooter.waitUntil(
+      () => shooter.lastAccount()?.balance === STARTING_BALANCE - STAKE + (pot - rake),
+    );
+    await victim.waitUntil(() => victim.lastAccount()?.balance === STARTING_BALANCE - STAKE);
+    await shooter.waitUntil(() => shooter.lastTreasury() === rake);
+    // Conservation: winner gain + loser loss + treasury rake == 0.
+    const winnerNet = shooter.lastAccount()!.balance - STARTING_BALANCE;
+    const loserNet = victim.lastAccount()!.balance - STARTING_BALANCE;
+    expect(winnerNet + loserNet + shooter.lastTreasury()).toBe(0);
   });
 
   it('forfeits the match to the opponent on disconnect', async () => {

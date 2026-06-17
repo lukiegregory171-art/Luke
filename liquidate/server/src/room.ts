@@ -17,11 +17,13 @@ import {
   hurtboxes,
   makeMoveState,
   perturbDirection,
+  rakeOf,
   stepMovement,
   type ClientMessage,
   type GameMap,
   type InputMessage,
   type MoveState,
+  type OverMessage,
   type PlayerSnapshot,
   type Vec3,
   type WeaponId,
@@ -68,7 +70,11 @@ export class Room {
     b: Connection,
     private readonly map: GameMap,
     private readonly opts: RoomOptions,
-    private readonly onEnd: () => void,
+    private readonly stake: number,
+    private readonly onResult: (
+      winnerConnId: string | null,
+      scores: Record<string, number>,
+    ) => void,
   ) {
     this.p0 = this.makePlayer(a, 0);
     this.p1 = this.makePlayer(b, 1);
@@ -102,12 +108,14 @@ export class Room {
       opponentId: this.p1.conn.id,
       selfSpawnIndex: 0,
       map: this.map,
+      stake: this.stake,
     });
     this.p1.conn.send({
       type: 'start',
       opponentId: this.p0.conn.id,
       selfSpawnIndex: 1,
       map: this.map,
+      stake: this.stake,
     });
     this.interval = setInterval(() => this.tick(), TICK_DT * 1000);
   }
@@ -136,9 +144,9 @@ export class Room {
     this.over = true;
     if (opp.conn.isOpen()) {
       opp.conn.send({ type: 'oppLeft' });
-      opp.conn.send({ type: 'over', winner: opp.conn.id, scores: this.scores() });
+      opp.conn.send(this.overMessage(opp.conn.id));
     }
-    this.cleanup();
+    this.cleanup(opp.conn.id);
   }
 
   private tick(): void {
@@ -295,16 +303,28 @@ export class Room {
   private endMatch(winnerId: string): void {
     if (this.over) return;
     this.over = true;
-    this.broadcast({ type: 'over', winner: winnerId, scores: this.scores() });
-    this.cleanup();
+    this.broadcast(this.overMessage(winnerId));
+    this.cleanup(winnerId);
   }
 
-  private cleanup(): void {
+  private overMessage(winnerId: string): OverMessage {
+    const pot = this.stake * 2;
+    return {
+      type: 'over',
+      winner: winnerId,
+      scores: this.scores(),
+      stake: this.stake,
+      pot,
+      rake: rakeOf(pot),
+    };
+  }
+
+  private cleanup(winnerConnId: string | null): void {
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = undefined;
     }
-    this.onEnd();
+    this.onResult(winnerConnId, this.scores());
   }
 
   private broadcastSnapshot(): void {
