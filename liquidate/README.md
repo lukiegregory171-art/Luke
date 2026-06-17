@@ -37,8 +37,9 @@ the browser:
    works). If it doesn't open automatically, use the **Ports** tab and open the
    `5173` URL.
 4. Click **FIND MATCH** (online 1v1 — open a second tab and click FIND MATCH to
-   duel yourself) or **PRACTICE RANGE** (solo). **WASD** move, **mouse** aim,
-   **click/hold** fire, **R** reload, **Esc** release the mouse.
+   duel yourself) or **PRACTICE RANGE** (offline vs a bot). **WASD** move,
+   **mouse** aim, **click/hold** fire, **Space** dash, **R** reload, **1**/**2**
+   switch weapon, **Esc** release the mouse.
 
 Only port 5173 is exposed: the Vite client proxies the game's WebSocket (`/ws`)
 to the internal Node server, so a single forwarded port is all you need. The
@@ -55,13 +56,14 @@ npm run dev      # starts the server (:8080) and the Vite client (:5173)
 ```
 
 Open <http://localhost:5173>. Controls: **WASD** move, **mouse** aim,
-**click/hold** fire, **R** reload, **Esc** release the mouse.
+**click/hold** fire, **Space** dash, **R** reload, **1**/**2** switch weapon
+(Rifle / Scattergun), **Esc** release the mouse.
 
 - **FIND MATCH** — queue for an online 1v1. **Open a second tab** (or share the
   URL) and click FIND MATCH there too; the two clients are matched and you duel,
   first to 3 kills. Everything (movement, hits, score, winner) is decided by the
   authoritative server.
-- **PRACTICE RANGE** — the offline solo target range (M1).
+- **PRACTICE RANGE** — an offline 1v1 against a bot.
 
 Other commands:
 
@@ -141,10 +143,24 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
   blocked by cover → headshots → kill → respawn → second kill → winner) and a
   forfeit case. Verified two real browser tabs matchmake and exchange snapshots.
 
-### Not done yet
+### Done (M3 — Gameplay depth)
 
-- **M3** — practice bot, second map, second weapon, movement polish, hit
-  feedback, kill feed, audio.
+- **Practice bot**: PRACTICE RANGE is now an offline 1v1 vs an AI that strafes,
+  holds mid-range, respects line of sight, and aims imperfectly (fair/beatable).
+  It moves with the shared movement code and is shot with the shared hitscan.
+- **Two maps**: Crossfire and Refinery; a match picks one at random and the
+  client rebuilds the arena from the chosen map (sent in `start`).
+- **Second weapon**: a Scattergun (multi-pellet spread, server-side RNG) beside
+  the Rifle. Switch with **1**/**2**; the server tracks the weapon and ammo.
+- **Movement polish**: velocity-based acceleration/friction and a **dash**
+  (Space, with cooldown) — all in `shared`, with velocity + dash cooldown in
+  snapshots so client prediction/reconciliation stays exact.
+- **Feedback**: hitmarkers (white/red), a directional **damage indicator**, a
+  **kill feed**, a damage flash, and a kill banner.
+- **Audio**: synthesized SFX (shoot/hit/reload/dash/kill/death) via Web Audio —
+  no asset files.
+
+### Not done yet
 - **M4** — accounts + stats (SQLite), play-money balance, stake/pot/rake/treasury
   lobby flow, demo deposit/withdraw. (Play-money only.)
 - **M5** *(optional, devnet only)* — read-only wallet connect for cosmetic/ranked
