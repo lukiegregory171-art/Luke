@@ -1,10 +1,10 @@
 /**
  * LIQUIDATE authoritative server.
  *
- * M0 scope: stand up the HTTP + WebSocket plumbing and the `init` handshake.
- * On connect, the server assigns the client an id and sends it the world
- * definition and tick rate. Matchmaking, rooms, and the 30 Hz simulation arrive
- * in M2 — this file is deliberately thin for now.
+ * Serves the client over plain HTTP and runs the authoritative game over
+ * WebSockets: on connect a client gets `init` (id + world + tick rate) and is
+ * queued by the matchmaker, which pairs players into 1v1 rooms. Rooms own all
+ * simulation, hit detection, and outcomes — clients only ever send inputs.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -15,15 +15,23 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   DEFAULT_MAP,
+  RESPAWN_DELAY,
   SERVER_PORT,
+  TARGET_KILLS,
   TICK_RATE,
   decode,
   encode,
   type ClientMessage,
   type InitMessage,
 } from '@liquidate/shared';
+import { makeConnection } from './connection';
+import { Matchmaker } from './matchmaker';
 
 const PORT = Number(process.env.PORT ?? SERVER_PORT);
+
+// Match rules, overridable via env (used to keep the integration test fast).
+const targetKills = Number(process.env.TARGET_KILLS) || TARGET_KILLS;
+const respawnDelay = Number(process.env.RESPAWN_DELAY) || RESPAWN_DELAY;
 
 // In production the server can serve the built client. In dev, Vite serves it,
 // so this directory simply won't exist — that's fine.
@@ -83,17 +91,16 @@ const httpServer = createServer(serveStatic);
 // HTTP static serving, and so a dev proxy (Vite) can forward just this path.
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
+const matchmaker = new Matchmaker(DEFAULT_MAP, { targetKills, respawnDelay });
+
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
+  const conn = makeConnection(id, socket);
   console.log(`[ws] connected ${id}`);
 
-  const init: InitMessage = {
-    type: 'init',
-    id,
-    tickRate: TICK_RATE,
-    map: DEFAULT_MAP,
-  };
+  const init: InitMessage = { type: 'init', id, tickRate: TICK_RATE, map: DEFAULT_MAP };
   socket.send(encode(init));
+  matchmaker.add(conn);
 
   socket.on('message', (raw) => {
     let msg: ClientMessage;
@@ -103,18 +110,16 @@ wss.on('connection', (socket: WebSocket) => {
       return; // ignore malformed input
     }
 
-    switch (msg.type) {
-      case 'ping':
-        socket.send(encode({ type: 'pong', t: msg.t }));
-        break;
-      // input / fire / reload are handled once rooms + simulation land in M2.
-      default:
-        break;
+    if (msg.type === 'ping') {
+      conn.send({ type: 'pong', t: msg.t });
+      return;
     }
+    matchmaker.route(conn, msg);
   });
 
   socket.on('close', () => {
     console.log(`[ws] disconnected ${id}`);
+    matchmaker.remove(conn);
   });
 
   socket.on('error', (err) => {
