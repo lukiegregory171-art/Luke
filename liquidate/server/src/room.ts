@@ -6,19 +6,25 @@
  */
 
 import {
+  DEFAULT_WEAPON,
   EYE_HEIGHT,
   MAX_HEALTH,
-  RIFLE,
   TICK_DT,
+  WEAPONS,
+  WEAPON_SWITCH_TIME,
   aimDirection,
   hitscan,
   hurtboxes,
+  makeMoveState,
+  perturbDirection,
   stepMovement,
   type ClientMessage,
   type GameMap,
   type InputMessage,
+  type MoveState,
   type PlayerSnapshot,
   type Vec3,
+  type WeaponId,
 } from '@liquidate/shared';
 import type { Connection } from './connection';
 
@@ -30,11 +36,12 @@ export interface RoomOptions {
 interface PlayerSim {
   conn: Connection;
   spawnIndex: 0 | 1;
-  feet: Vec3;
+  move: MoveState;
   yaw: number;
   pitch: number;
   health: number;
-  ammo: number;
+  weapon: WeaponId;
+  ammo: Record<WeaponId, number>;
   reloading: boolean;
   reloadTimer: number;
   fireCooldown: number;
@@ -43,6 +50,10 @@ interface PlayerSim {
   score: number;
   lastProcessedSeq: number;
   queue: ClientMessage[];
+}
+
+function fullAmmo(): Record<WeaponId, number> {
+  return { rifle: WEAPONS.rifle.magazine, shotgun: WEAPONS.shotgun.magazine };
 }
 
 export class Room {
@@ -68,11 +79,12 @@ export class Room {
     return {
       conn,
       spawnIndex,
-      feet: { ...spawn.pos },
+      move: makeMoveState(spawn.pos),
       yaw: spawn.yaw,
       pitch: 0,
       health: MAX_HEALTH,
-      ammo: RIFLE.magazine,
+      weapon: DEFAULT_WEAPON,
+      ammo: fullAmmo(),
       reloading: false,
       reloadTimer: 0,
       fireCooldown: 0,
@@ -85,17 +97,32 @@ export class Room {
   }
 
   start(): void {
-    this.p0.conn.send({ type: 'start', opponentId: this.p1.conn.id, selfSpawnIndex: 0 });
-    this.p1.conn.send({ type: 'start', opponentId: this.p0.conn.id, selfSpawnIndex: 1 });
+    this.p0.conn.send({
+      type: 'start',
+      opponentId: this.p1.conn.id,
+      selfSpawnIndex: 0,
+      map: this.map,
+    });
+    this.p1.conn.send({
+      type: 'start',
+      opponentId: this.p0.conn.id,
+      selfSpawnIndex: 1,
+      map: this.map,
+    });
     this.interval = setInterval(() => this.tick(), TICK_DT * 1000);
   }
 
-  /** Queue an in-match message (input/fire/reload) from a player. */
+  /** Queue an in-match message from a player. */
   handleMessage(conn: Connection, msg: ClientMessage): void {
     if (this.over) return;
     const p = this.playerFor(conn);
     if (!p) return;
-    if (msg.type === 'input' || msg.type === 'fire' || msg.type === 'reload') {
+    if (
+      msg.type === 'input' ||
+      msg.type === 'fire' ||
+      msg.type === 'reload' ||
+      msg.type === 'switch'
+    ) {
       p.queue.push(msg);
     }
   }
@@ -131,7 +158,7 @@ export class Room {
       p.reloadTimer -= dt;
       if (p.reloadTimer <= 0) {
         p.reloading = false;
-        p.ammo = RIFLE.magazine;
+        p.ammo[p.weapon] = WEAPONS[p.weapon].magazine;
       }
     }
     if (!p.alive) {
@@ -145,6 +172,7 @@ export class Room {
       if (msg.type === 'input') this.applyInput(p, msg);
       else if (msg.type === 'fire') this.fire(p, this.opponentOf(p));
       else if (msg.type === 'reload') this.startReload(p);
+      else if (msg.type === 'switch') this.switchWeapon(p, msg.weapon);
       if (this.over) break;
     }
     p.queue.length = 0;
@@ -154,9 +182,9 @@ export class Room {
     p.yaw = msg.yaw;
     p.pitch = msg.pitch;
     if (p.alive) {
-      p.feet = stepMovement(
-        p.feet,
-        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: msg.yaw },
+      p.move = stepMovement(
+        p.move,
+        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: msg.yaw, dash: msg.dash },
         msg.dt,
         this.map,
       );
@@ -169,30 +197,53 @@ export class Room {
     p.lastProcessedSeq = msg.seq;
   }
 
+  private switchWeapon(p: PlayerSim, weapon: WeaponId): void {
+    if (!p.alive || p.weapon === weapon || !WEAPONS[weapon]) return;
+    p.weapon = weapon;
+    p.reloading = false;
+    p.reloadTimer = 0;
+    p.fireCooldown = Math.max(p.fireCooldown, WEAPON_SWITCH_TIME);
+  }
+
   private fire(shooter: PlayerSim, target: PlayerSim): void {
     if (this.over || !shooter.alive || shooter.reloading || shooter.fireCooldown > 0) return;
-    if (shooter.ammo <= 0) {
+    const w = WEAPONS[shooter.weapon];
+    if (shooter.ammo[shooter.weapon] <= 0) {
       this.startReload(shooter);
       return;
     }
 
-    shooter.ammo--;
-    shooter.fireCooldown = RIFLE.fireInterval;
+    shooter.ammo[shooter.weapon]--;
+    shooter.fireCooldown = w.fireInterval;
 
-    const eye: Vec3 = { x: shooter.feet.x, y: shooter.feet.y + EYE_HEIGHT, z: shooter.feet.z };
+    const eye: Vec3 = {
+      x: shooter.move.pos.x,
+      y: shooter.move.pos.y + EYE_HEIGHT,
+      z: shooter.move.pos.z,
+    };
     const dir = aimDirection(shooter.yaw, shooter.pitch);
-    this.broadcast({ type: 'fire', id: shooter.conn.id, origin: eye, dir });
+    this.broadcast({ type: 'fire', id: shooter.conn.id, weapon: shooter.weapon, origin: eye, dir });
 
     if (target.alive) {
-      const hit = hitscan(eye, dir, RIFLE.range, hurtboxes(target.feet), this.map.obstacles);
-      if (hit) {
-        const damage = Math.round(RIFLE.damage * (hit.headshot ? RIFLE.headshotMultiplier : 1));
+      const box = hurtboxes(target.move.pos);
+      let damage = 0;
+      let headshot = false;
+      for (let i = 0; i < w.pellets; i++) {
+        const rayDir = perturbDirection(dir, w.spread);
+        const hit = hitscan(eye, rayDir, w.range, box, this.map.obstacles);
+        if (hit) {
+          damage += w.damage * (hit.headshot ? w.headshotMultiplier : 1);
+          if (hit.headshot) headshot = true;
+        }
+      }
+      if (damage > 0) {
+        damage = Math.round(damage);
         target.health -= damage;
         this.broadcast({
           type: 'hit',
           shooter: shooter.conn.id,
           target: target.conn.id,
-          headshot: hit.headshot,
+          headshot,
           damage,
         });
         if (target.health <= 0) {
@@ -209,22 +260,24 @@ export class Room {
       }
     }
 
-    if (shooter.ammo === 0) this.startReload(shooter);
+    if (shooter.ammo[shooter.weapon] === 0) this.startReload(shooter);
   }
 
   private startReload(p: PlayerSim): void {
-    if (p.reloading || p.ammo === RIFLE.magazine || !p.alive) return;
+    const w = WEAPONS[p.weapon];
+    if (p.reloading || p.ammo[p.weapon] === w.magazine || !p.alive) return;
     p.reloading = true;
-    p.reloadTimer = RIFLE.reloadTime;
+    p.reloadTimer = w.reloadTime;
   }
 
   private respawn(p: PlayerSim): void {
     const spawn = this.map.spawns[p.spawnIndex];
-    p.feet = { ...spawn.pos };
+    p.move = makeMoveState(spawn.pos);
     p.yaw = spawn.yaw;
     p.pitch = 0;
     p.health = MAX_HEALTH;
-    p.ammo = RIFLE.magazine;
+    p.weapon = DEFAULT_WEAPON;
+    p.ammo = fullAmmo();
     p.reloading = false;
     p.reloadTimer = 0;
     p.fireCooldown = 0;
@@ -232,9 +285,9 @@ export class Room {
     this.broadcast({
       type: 'respawn',
       id: p.conn.id,
-      x: p.feet.x,
-      y: p.feet.y,
-      z: p.feet.z,
+      x: p.move.pos.x,
+      y: p.move.pos.y,
+      z: p.move.pos.z,
       yaw: p.yaw,
     });
   }
@@ -260,26 +313,23 @@ export class Room {
       [this.p0.conn.id]: this.p0.lastProcessedSeq,
       [this.p1.conn.id]: this.p1.lastProcessedSeq,
     };
-    const msg = {
-      type: 'snap' as const,
-      tick: this.tickCount,
-      serverTime: Date.now(),
-      ack,
-      players,
-    };
-    this.broadcast(msg);
+    this.broadcast({ type: 'snap', tick: this.tickCount, serverTime: Date.now(), ack, players });
   }
 
   private snapshotOf(p: PlayerSim): PlayerSnapshot {
     return {
       id: p.conn.id,
-      x: p.feet.x,
-      y: p.feet.y,
-      z: p.feet.z,
+      x: p.move.pos.x,
+      y: p.move.pos.y,
+      z: p.move.pos.z,
+      vx: p.move.vel.x,
+      vz: p.move.vel.z,
+      dashCd: p.move.dashCd,
       yaw: p.yaw,
       pitch: p.pitch,
       health: p.health,
-      ammo: p.ammo,
+      ammo: p.ammo[p.weapon],
+      weapon: p.weapon,
       reloading: p.reloading,
       alive: p.alive,
       score: p.score,

@@ -14,7 +14,7 @@ export class Matchmaker {
   private readonly roomByConn = new Map<string, Room>();
 
   constructor(
-    private readonly map: GameMap,
+    private readonly pickMap: () => GameMap,
     private readonly opts: RoomOptions,
   ) {}
 
@@ -55,7 +55,7 @@ export class Matchmaker {
         continue;
       }
 
-      const room = new Room(a, b, this.map, this.opts, () => {
+      const room = new Room(a, b, this.pickMap(), this.opts, () => {
         this.roomByConn.delete(a.id);
         this.roomByConn.delete(b.id);
       });

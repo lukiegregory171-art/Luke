@@ -164,7 +164,13 @@ async function connectPair(): Promise<{
 beforeAll(async () => {
   server = spawn(TSX, [ENTRY], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), TARGET_KILLS: '2', RESPAWN_DELAY: '0.2' },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      TARGET_KILLS: '2',
+      RESPAWN_DELAY: '0.2',
+      MAP: 'crossfire',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';

@@ -15,13 +15,16 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   DEFAULT_MAP,
+  MAPS,
   RESPAWN_DELAY,
   SERVER_PORT,
   TARGET_KILLS,
   TICK_RATE,
   decode,
   encode,
+  randomMap,
   type ClientMessage,
+  type GameMap,
   type InitMessage,
 } from '@liquidate/shared';
 import { makeConnection } from './connection';
@@ -29,9 +32,13 @@ import { Matchmaker } from './matchmaker';
 
 const PORT = Number(process.env.PORT ?? SERVER_PORT);
 
-// Match rules, overridable via env (used to keep the integration test fast).
+// Match rules, overridable via env (used to keep the integration test fast and
+// deterministic).
 const targetKills = Number(process.env.TARGET_KILLS) || TARGET_KILLS;
 const respawnDelay = Number(process.env.RESPAWN_DELAY) || RESPAWN_DELAY;
+const forcedMap: GameMap | undefined = process.env.MAP ? MAPS[process.env.MAP] : undefined;
+const pickMap = (): GameMap => forcedMap ?? randomMap();
+const initMap = forcedMap ?? DEFAULT_MAP;
 
 // In production the server can serve the built client. In dev, Vite serves it,
 // so this directory simply won't exist — that's fine.
@@ -91,14 +98,14 @@ const httpServer = createServer(serveStatic);
 // HTTP static serving, and so a dev proxy (Vite) can forward just this path.
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-const matchmaker = new Matchmaker(DEFAULT_MAP, { targetKills, respawnDelay });
+const matchmaker = new Matchmaker(pickMap, { targetKills, respawnDelay });
 
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
   const conn = makeConnection(id, socket);
   console.log(`[ws] connected ${id}`);
 
-  const init: InitMessage = { type: 'init', id, tickRate: TICK_RATE, map: DEFAULT_MAP };
+  const init: InitMessage = { type: 'init', id, tickRate: TICK_RATE, map: initMap };
   socket.send(encode(init));
   matchmaker.add(conn);
 
