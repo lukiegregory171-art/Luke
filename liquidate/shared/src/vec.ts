@@ -91,6 +91,23 @@ export function rightFromYaw(yaw: number): Vec3 {
   return { x: Math.cos(yaw), y: 0, z: -Math.sin(yaw) };
 }
 
+/** Perturb a unit direction within a random cone of the given half-angle. */
+export function perturbDirection(dir: Vec3, spread: number): Vec3 {
+  if (spread <= 0) return { x: dir.x, y: dir.y, z: dir.z };
+  const ref: Vec3 = Math.abs(dir.y) > 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const right = normalize(cross(dir, ref));
+  const up = normalize(cross(right, dir));
+  const angle = Math.random() * Math.PI * 2;
+  const radius = spread * Math.sqrt(Math.random());
+  const ca = Math.cos(angle) * radius;
+  const sa = Math.sin(angle) * radius;
+  return normalize({
+    x: dir.x + right.x * ca + up.x * sa,
+    y: dir.y + right.y * ca + up.y * sa,
+    z: dir.z + right.z * ca + up.z * sa,
+  });
+}
+
 /** Inverse of {@link aimDirection}: yaw/pitch that look along `dir`. */
 export function aimAngles(dir: Vec3): { yaw: number; pitch: number } {
   const len = length(dir);

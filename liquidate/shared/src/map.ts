@@ -77,8 +77,51 @@ export const CROSSFIRE: GameMap = {
   ],
 };
 
-export const MAPS: Record<string, GameMap> = {
-  [CROSSFIRE.id]: CROSSFIRE,
+const REFINERY_W = 34;
+const REFINERY_D = 38;
+
+/**
+ * "Refinery" — a wider arena built around four pillars in a diamond and a long
+ * central divider with gaps, so there's no clean cross-map sightline and lots of
+ * mid-range angles. Symmetric across both axes.
+ */
+export const REFINERY: GameMap = {
+  id: 'refinery',
+  name: 'Refinery',
+  width: REFINERY_W,
+  depth: REFINERY_D,
+  wallHeight: WALL_HEIGHT,
+  obstacles: [
+    // Central divider in two halves with a gap at the middle.
+    box(0, -7, 2, 8, 2.6),
+    box(0, 7, 2, 8, 2.6),
+    // Four pillars in a diamond around the centre.
+    box(-9, 0, 2, 2, 3.0),
+    box(9, 0, 2, 2, 3.0),
+    box(0, -14, 2, 2, 3.0),
+    box(0, 14, 2, 2, 3.0),
+    // Mirrored corner crates.
+    box(-12, -12, 3, 3, 1.4),
+    box(12, 12, 3, 3, 1.4),
+    box(12, -12, 3, 3, 1.4),
+    box(-12, 12, 3, 3, 1.4),
+  ],
+  spawns: [
+    { pos: { x: -REFINERY_W / 2 + 3, y: 0, z: 0 }, yaw: -Math.PI / 2 }, // -X end, facing +X
+    { pos: { x: REFINERY_W / 2 - 3, y: 0, z: 0 }, yaw: Math.PI / 2 }, // +X end, facing -X
+  ],
 };
 
+export const MAPS: Record<string, GameMap> = {
+  [CROSSFIRE.id]: CROSSFIRE,
+  [REFINERY.id]: REFINERY,
+};
+
+export const MAP_LIST: GameMap[] = [CROSSFIRE, REFINERY];
+
 export const DEFAULT_MAP = CROSSFIRE;
+
+/** Pick a random map (used per match). */
+export function randomMap(): GameMap {
+  return MAP_LIST[Math.floor(Math.random() * MAP_LIST.length)];
+}

@@ -6,6 +6,7 @@ import {
   add,
   clampDt,
   length,
+  makeMoveState,
   normalize,
   resolveCollisions,
   stepMovement,
@@ -39,11 +40,37 @@ describe('clampDt (anti speed-hack)', () => {
 });
 
 describe('movement + collision', () => {
-  it('moves the player forward over time', () => {
-    const start = v3(0, 0, -5);
+  it('accelerates the player forward over a few steps', () => {
+    let state = makeMoveState(v3(0, 0, -5));
     // moveFwd toward +Z requires yaw = PI (forward = +Z) per our convention.
-    const next = stepMovement(start, { moveFwd: 1, moveRight: 0, yaw: Math.PI }, 0.1, DEFAULT_MAP);
-    expect(next.z).toBeGreaterThan(start.z);
+    for (let i = 0; i < 10; i++) {
+      state = stepMovement(state, { moveFwd: 1, moveRight: 0, yaw: Math.PI }, 1 / 60, DEFAULT_MAP);
+    }
+    expect(state.pos.z).toBeGreaterThan(-5);
+    expect(state.vel.z).toBeGreaterThan(0);
+  });
+
+  it('coasts to a stop via friction when input ceases', () => {
+    let state = makeMoveState(v3(0, 0, 0));
+    for (let i = 0; i < 10; i++) {
+      state = stepMovement(state, { moveFwd: 1, moveRight: 0, yaw: Math.PI }, 1 / 60, DEFAULT_MAP);
+    }
+    const movingSpeed = Math.hypot(state.vel.x, state.vel.z);
+    for (let i = 0; i < 30; i++) {
+      state = stepMovement(state, { moveFwd: 0, moveRight: 0, yaw: Math.PI }, 1 / 60, DEFAULT_MAP);
+    }
+    expect(Math.hypot(state.vel.x, state.vel.z)).toBeLessThan(movingSpeed);
+  });
+
+  it('dashes faster than the normal max speed', () => {
+    const dashed = stepMovement(
+      makeMoveState(v3(0, 0, 0)),
+      { moveFwd: 1, moveRight: 0, yaw: Math.PI, dash: true },
+      1 / 60,
+      DEFAULT_MAP,
+    );
+    expect(Math.hypot(dashed.vel.x, dashed.vel.z)).toBeGreaterThan(6); // > MOVE_SPEED
+    expect(dashed.dashCd).toBeGreaterThan(0); // dash went on cooldown
   });
 
   it('keeps the player inside the arena bounds', () => {

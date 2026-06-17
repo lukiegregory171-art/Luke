@@ -14,8 +14,16 @@ export const MAX_DT = 0.05;
 export const PLAYER_RADIUS = 0.4; // horizontal collision radius (units = metres)
 export const PLAYER_HEIGHT = 1.8; // full standing height
 export const EYE_HEIGHT = 1.6; // camera / ray origin height above feet
-export const MOVE_SPEED = 6.0; // ground move speed, units/sec
+export const MOVE_SPEED = 6.0; // max ground move speed, units/sec
 export const MAX_HEALTH = 100;
+
+// --- Movement feel (velocity-based; shared by prediction + authority) -------
+export const GROUND_ACCEL = 14; // acceleration toward the wished direction
+export const GROUND_FRICTION = 10; // deceleration when not accelerating
+export const STOP_SPEED = 2.0; // friction floor so you stop crisply
+export const DASH_SPEED = 15; // burst speed of a dash
+export const DASH_COOLDOWN = 1.6; // seconds between dashes
+export const WEAPON_SWITCH_TIME = 0.35; // brief delay after swapping weapons
 
 // --- Hitboxes (spheres relative to feet position) --------------------------
 // Used by server-side hit detection. Body covers the torso, head sits on top.
@@ -27,15 +35,19 @@ export const TARGET_KILLS = 3; // first to this many kills wins
 export const RESPAWN_DELAY = 2.0; // seconds before respawn
 
 // --- Weapons ---------------------------------------------------------------
+export type WeaponId = 'rifle' | 'shotgun';
+
 export interface WeaponConfig {
-  id: string;
+  id: WeaponId;
   name: string;
-  damage: number; // body damage
+  damage: number; // body damage (per pellet for multi-pellet weapons)
   headshotMultiplier: number;
   fireInterval: number; // seconds between shots (enforced server-side)
   magazine: number; // rounds per magazine
   reloadTime: number; // seconds
   range: number; // max hitscan distance
+  pellets: number; // rays fired per shot (1 = single hitscan)
+  spread: number; // max cone half-angle in radians (0 = pinpoint)
 }
 
 export const RIFLE: WeaponConfig = {
@@ -47,4 +59,26 @@ export const RIFLE: WeaponConfig = {
   magazine: 30,
   reloadTime: 1.8,
   range: 200,
+  pellets: 1,
+  spread: 0,
 };
+
+export const SHOTGUN: WeaponConfig = {
+  id: 'shotgun',
+  name: 'Scattergun',
+  damage: 11,
+  headshotMultiplier: 1.5,
+  fireInterval: 0.7,
+  magazine: 7,
+  reloadTime: 2.4,
+  range: 45,
+  pellets: 8,
+  spread: 0.08,
+};
+
+export const WEAPONS: Record<WeaponId, WeaponConfig> = {
+  rifle: RIFLE,
+  shotgun: SHOTGUN,
+};
+
+export const DEFAULT_WEAPON: WeaponId = 'rifle';

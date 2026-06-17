@@ -12,6 +12,7 @@
  */
 
 import type { GameMap } from './map';
+import type { WeaponId } from './config';
 
 export type PlayerId = string;
 
@@ -26,6 +27,7 @@ export interface InputMessage {
   moveRight: number; // -1..1
   yaw: number; // radians
   pitch: number; // radians
+  dash?: boolean; // edge-triggered dash request
 }
 
 export interface FireMessage {
@@ -37,12 +39,22 @@ export interface ReloadMessage {
   type: 'reload';
 }
 
+export interface SwitchMessage {
+  type: 'switch';
+  weapon: WeaponId;
+}
+
 export interface PingMessage {
   type: 'ping';
   t: number; // client timestamp (ms), echoed back in pong
 }
 
-export type ClientMessage = InputMessage | FireMessage | ReloadMessage | PingMessage;
+export type ClientMessage =
+  | InputMessage
+  | FireMessage
+  | ReloadMessage
+  | SwitchMessage
+  | PingMessage;
 
 // --- Server -> Client ------------------------------------------------------
 
@@ -61,6 +73,7 @@ export interface StartMessage {
   type: 'start';
   opponentId: PlayerId;
   selfSpawnIndex: 0 | 1;
+  map: GameMap; // the map this match is played on (may differ from init's default)
 }
 
 /** Authoritative per-player state at a tick. */
@@ -69,10 +82,14 @@ export interface PlayerSnapshot {
   x: number;
   y: number;
   z: number;
+  vx: number; // horizontal velocity (for client reconciliation)
+  vz: number;
+  dashCd: number; // dash cooldown remaining (for client reconciliation)
   yaw: number;
   pitch: number;
   health: number;
   ammo: number;
+  weapon: WeaponId;
   reloading: boolean;
   alive: boolean;
   score: number;
@@ -90,6 +107,7 @@ export interface SnapshotMessage {
 export interface FireEvent {
   type: 'fire';
   id: PlayerId;
+  weapon: WeaponId;
   origin: { x: number; y: number; z: number };
   dir: { x: number; y: number; z: number };
 }
