@@ -36,10 +36,11 @@ the browser:
    Browser** (use a real browser tab, not the in-editor preview, so pointer lock
    works). If it doesn't open automatically, use the **Ports** tab and open the
    `5173` URL.
-4. Click **FIND MATCH** (online 1v1 — open a second tab and click FIND MATCH to
-   duel yourself) or **PRACTICE RANGE** (offline vs a bot). **WASD** move,
-   **mouse** aim, **click/hold** fire, **Space** dash, **R** reload, **1**/**2**
-   switch weapon, **Esc** release the mouse.
+4. **Sign in** with a handle, pick a **demo stake**, and click **FIND MATCH**
+   (online 1v1 — open a second tab, sign in, and click FIND MATCH to duel
+   yourself) or **PRACTICE RANGE** (offline vs a bot). **WASD** move, **mouse**
+   aim, **click/hold** fire, **Space** dash, **R** reload, **1**/**2** switch
+   weapon, **Esc** release the mouse. All currency is play-money DEMO.
 
 Only port 5173 is exposed: the Vite client proxies the game's WebSocket (`/ws`)
 to the internal Node server, so a single forwarded port is all you need. The
@@ -55,15 +56,18 @@ npm install
 npm run dev      # starts the server (:8080) and the Vite client (:5173)
 ```
 
-Open <http://localhost:5173>. Controls: **WASD** move, **mouse** aim,
-**click/hold** fire, **Space** dash, **R** reload, **1**/**2** switch weapon
-(Rifle / Scattergun), **Esc** release the mouse.
+Open <http://localhost:5173> and **sign in with a handle** (you're granted a
+starting DEMO balance). Controls: **WASD** move, **mouse** aim, **click/hold**
+fire, **Space** dash, **R** reload, **1**/**2** switch weapon (Rifle /
+Scattergun), **Esc** release the mouse.
 
-- **FIND MATCH** — queue for an online 1v1. **Open a second tab** (or share the
-  URL) and click FIND MATCH there too; the two clients are matched and you duel,
-  first to 3 kills. Everything (movement, hits, score, winner) is decided by the
-  authoritative server.
-- **PRACTICE RANGE** — an offline 1v1 against a bot.
+- **FIND MATCH** — pick a **demo stake**, then queue for an online 1v1. **Open a
+  second tab** (or share the URL), sign in, and click FIND MATCH there too; the
+  two clients duel, first to 3 kills. The pot is 2× the stake, the house takes a
+  1% rake, and the winner is credited net — all server-authoritative DEMO money.
+- **PRACTICE RANGE** — an offline 1v1 against a bot (no stake).
+
+All currency is **play-money DEMO** — there is no real money anywhere.
 
 Other commands:
 
@@ -160,9 +164,29 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
 - **Audio**: synthesized SFX (shoot/hit/reload/dash/kill/death) via Web Audio —
   no asset files.
 
+### Done (M4 — Demo economy, play-money only)
+
+> **No real money.** Every amount here is an integer **DEMO** credit held
+> server-side in SQLite. There is no custody, fiat, token, or real
+> deposit/withdraw of value — this only *simulates* a stake/pot/rake economy.
+
+- **Accounts + stats** in SQLite (`better-sqlite3`): sign in by handle, granted
+  a starting DEMO balance; persistent wins/losses/kills/deaths.
+- **Lobby flow**: pick a stake → queue → opponent matches → **pot = 2 × stake**,
+  **1% rake** to the house → **winner credited net, loser debited**. Both stakes
+  are escrowed at match start and settled (or refunded) at the end. The match-over
+  screen shows your net DEMO change.
+- **Server-authoritative balances**: clients only send intents (login / queue /
+  deposit / withdraw); the server owns every balance via a `Bank` module.
+- **Visible treasury** accumulating the rake (and demo fees), shown in the lobby.
+- **Demo deposit/withdraw** with their own fee (to the treasury), purely to
+  visualise funding/cash-out — these deliberately mint/burn DEMO credits.
+- **Append-only ledger + reconciliation**: every balance move is logged; the sum
+  of ledger deltas always equals the sum of all balances. Unit-tested for match
+  conservation (nothing created/destroyed except the rake) and reconciliation;
+  the integration test drives a full staked match and checks the play-money moves.
+
 ### Not done yet
-- **M4** — accounts + stats (SQLite), play-money balance, stake/pot/rake/treasury
-  lobby flow, demo deposit/withdraw. (Play-money only.)
 - **M5** *(optional, devnet only)* — read-only wallet connect for cosmetic/ranked
   utility behind a feature flag. No wagering, no real value.
 - **M6** — lag compensation, reconnection grace, anti-cheat sanity checks,
