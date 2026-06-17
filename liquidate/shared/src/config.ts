@@ -34,6 +34,27 @@ export const HEAD_SPHERE = { centerY: 1.65, radius: 0.22 };
 export const TARGET_KILLS = 3; // first to this many kills wins
 export const RESPAWN_DELAY = 2.0; // seconds before respawn
 
+// --- Economy (PLAY-MONEY / DEMO ONLY — never real funds or custody) ---------
+// All amounts are integer "DEMO" credits held server-side in SQLite. This is a
+// simulation of a stake/pot/rake model; there is no real money anywhere.
+export const CURRENCY = 'DEMO';
+export const STARTING_BALANCE = 1000; // granted when an account is first created
+export const RAKE_BPS = 100; // house rake on the pot (100 bps = 1%)
+export const DEPOSIT_FEE_BPS = 200; // demo deposit fee (2%)
+export const WITHDRAW_FEE_BPS = 200; // demo withdraw fee (2%)
+export const DEFAULT_STAKE = 50;
+export const MAX_STAKE = 100000;
+
+/** Basis-points fee of an amount, floored to an integer. */
+export function bpsOf(amount: number, bps: number): number {
+  return Math.floor((amount * bps) / 10000);
+}
+
+/** House rake taken from a pot. */
+export function rakeOf(pot: number): number {
+  return bpsOf(pot, RAKE_BPS);
+}
+
 // --- Weapons ---------------------------------------------------------------
 export type WeaponId = 'rifle' | 'shotgun';
 

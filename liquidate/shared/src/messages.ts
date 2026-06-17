@@ -44,6 +44,30 @@ export interface SwitchMessage {
   weapon: WeaponId;
 }
 
+// --- Economy (play-money / DEMO) -------------------------------------------
+
+/** Create or load a demo account by handle. */
+export interface LoginMessage {
+  type: 'login';
+  handle: string;
+}
+
+/** Enter matchmaking with a demo stake (server validates against balance). */
+export interface QueueMessage {
+  type: 'queue';
+  stake: number;
+}
+
+export interface DepositMessage {
+  type: 'deposit';
+  amount: number;
+}
+
+export interface WithdrawMessage {
+  type: 'withdraw';
+  amount: number;
+}
+
 export interface PingMessage {
   type: 'ping';
   t: number; // client timestamp (ms), echoed back in pong
@@ -54,6 +78,10 @@ export type ClientMessage =
   | FireMessage
   | ReloadMessage
   | SwitchMessage
+  | LoginMessage
+  | QueueMessage
+  | DepositMessage
+  | WithdrawMessage
   | PingMessage;
 
 // --- Server -> Client ------------------------------------------------------
@@ -74,6 +102,25 @@ export interface StartMessage {
   opponentId: PlayerId;
   selfSpawnIndex: 0 | 1;
   map: GameMap; // the map this match is played on (may differ from init's default)
+  stake: number; // each player's demo stake; pot = 2 * stake
+}
+
+/** Authoritative demo account state (sent after login and any balance change). */
+export interface AccountMessage {
+  type: 'account';
+  id: PlayerId;
+  handle: string;
+  balance: number;
+  wins: number;
+  losses: number;
+  kills: number;
+  deaths: number;
+}
+
+/** Current house treasury balance (accumulated rake + demo fees). */
+export interface TreasuryMessage {
+  type: 'treasury';
+  balance: number;
 }
 
 /** Authoritative per-player state at a tick. */
@@ -139,6 +186,9 @@ export interface OverMessage {
   type: 'over';
   winner: PlayerId;
   scores: Record<PlayerId, number>;
+  stake: number; // each player's stake
+  pot: number; // 2 * stake
+  rake: number; // house rake taken from the pot
 }
 
 export interface OppLeftMessage {
@@ -161,6 +211,8 @@ export type ServerMessage =
   | RespawnEvent
   | OverMessage
   | OppLeftMessage
+  | AccountMessage
+  | TreasuryMessage
   | PongMessage;
 
 // --- Helpers ---------------------------------------------------------------
