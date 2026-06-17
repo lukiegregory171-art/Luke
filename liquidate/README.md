@@ -203,9 +203,51 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
 - Configure via build env: `VITE_TOKEN=1`, `VITE_TOKEN_MINT=<devnet SPL mint>`,
   optional `VITE_SOLANA_RPC`.
 
-### Not done yet
-- **M6** — lag compensation, reconnection grace, anti-cheat sanity checks,
-  structured logging, Docker deploy.
+### Done (M6 — Hardening)
+
+- **Lag compensation ("favor the shooter")**: the server keeps ~1s of each
+  player's position history and resolves a shot against where the target was at
+  the shooter's view time (`now − rtt/2 − interpolation`, clamped). RTT is
+  **server-measured** via ping/pong (not client-trusted). Unit-tested: a rewound
+  shot lands where a high-latency shooter aimed, while the present position
+  misses.
+- **Reconnection grace**: a dropped player pauses the match for a grace window
+  and can rebind (same account) to resume; otherwise it forfeits. Integration-
+  tested (no immediate forfeit; resume on reconnect; forfeit after grace).
+- **Anti-cheat sanity checks** (server-authoritative): a per-tick simulated-
+  movement budget bounds input-flooding, view pitch is clamped/validated, and
+  fire-rate / ammo / reload / `dt` are already enforced. Integration-tested
+  (flooded inputs move a bounded distance; impossible pitch is clamped).
+  **These reject impossible _inputs_; they do NOT and cannot stop aimbots** — a
+  bot that aims perfectly sends legal inputs. (Noted in `room.ts`.)
+- **Structured logging**: one JSON object per line (level/time/event/fields).
+- **Deployable build**: multi-stage `Dockerfile` (+ `.dockerignore`) ships the
+  bundled server, the built client, and prod deps; the Node server serves both
+  on one port. See *Deploy* below.
+
+## Deploy
+
+The repo builds to a single Node server that serves the client and the
+WebSocket game on one port, with SQLite for the play-money economy.
+
+```bash
+# From liquidate/ — build the image and run it
+docker build -t liquidate .
+docker run -p 8080:8080 -v liquidate-data:/data liquidate
+# open http://localhost:8080
+```
+
+- **Env**: `PORT` (default 8080), `LIQUIDATE_DB` (default `/data/liquidate.sqlite`
+  in the image — mount a volume to persist accounts), `TARGET_KILLS`,
+  `RESPAWN_DELAY`, `RECONNECT_GRACE_MS`, `MAP` (force a map; otherwise random).
+- **Without Docker**: `npm ci && npm run build`, then
+  `LIQUIDATE_DB=./data.sqlite node server/dist/index.js` (serves `client/dist`).
+- The optional M5 devnet token is a **client build-time** flag (`VITE_TOKEN=1`,
+  `VITE_TOKEN_MINT=…`) and is independent of the server.
+
+> Still play-money only. Deploying this does not make it a real-money product;
+> real-money wagering/custody is a licensed-operator activity and is out of
+> scope by design.
 
 ## Note on repo location
 
