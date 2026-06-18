@@ -21,12 +21,15 @@ export class Hud {
   private readonly weaponEl = document.getElementById('weapon') as HTMLElement;
   private readonly killfeed = document.getElementById('killfeed') as HTMLElement;
   private readonly dmgArrow = document.getElementById('dmgdir-arrow') as HTMLElement;
+  private readonly crosshair = document.getElementById('crosshair') as HTMLElement;
+  private readonly lowhp = document.getElementById('lowhp') as HTMLElement;
 
   private hitTimer?: ReturnType<typeof setTimeout>;
   private bannerTimer?: ReturnType<typeof setTimeout>;
 
   show(visible: boolean): void {
     this.root.classList.toggle('hidden', !visible);
+    if (!visible) this.lowhp.classList.remove('show'); // clear the critical vignette
   }
 
   setAmmo(cur: number, max: number): void {
@@ -53,7 +56,17 @@ export class Hud {
     const frac = Math.max(0, Math.min(1, hp / MAX_HEALTH));
     this.healthFill.style.width = `${frac * 100}%`;
     this.healthNum.textContent = String(Math.max(0, Math.round(hp)));
-    this.healthFill.classList.toggle('low', frac <= 0.3);
+    const low = frac <= 0.3;
+    this.healthFill.classList.toggle('low', low);
+    // Pulsing red edge vignette while critical (cleared when dead/healed).
+    this.lowhp.classList.toggle('show', low && hp > 0);
+  }
+
+  /** Brief crosshair expansion on firing (recoil read). */
+  crosshairKick(): void {
+    this.crosshair.classList.remove('kick');
+    void this.crosshair.offsetWidth; // restart the animation
+    this.crosshair.classList.add('kick');
   }
 
   setLatency(ms: number): void {

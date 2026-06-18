@@ -23,6 +23,9 @@
     <!-- Damage flash (full-screen red vignette) -->
     <div id="damage"></div>
 
+    <!-- Persistent low-health vignette (pulses while critical) -->
+    <div id="lowhp"></div>
+
     <!-- HUD overlay (shown while playing) -->
     <div id="hud" class="hidden">
       <div id="crosshair">
@@ -108,6 +111,16 @@
             <option value="ultra">Ultra</option>
           </select>
           <span class="hint">· backtick toggles perf HUD</span>
+        </div>
+
+        <div class="lobby-options">
+          <label class="opt"
+            >VOLUME <input id="opt-volume" type="range" min="0" max="100" value="70"
+          /></label>
+          <label class="opt opt-check"><input id="opt-mute" type="checkbox" /> MUTE</label>
+          <label class="opt"
+            >SENSITIVITY <input id="opt-sens" type="range" min="0" max="100" value="50"
+          /></label>
         </div>
 
         <div class="btn-row">

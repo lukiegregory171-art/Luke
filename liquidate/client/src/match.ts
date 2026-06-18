@@ -195,11 +195,9 @@ export class Match {
       this.opponent.update(renderTime, dt);
     }
 
-    this.weapon.update(dt, {
-      speed: Math.hypot(this.predicted.vel.x, this.predicted.vel.z),
-      yaw: this.input.yaw,
-      pitch: this.input.pitch,
-    });
+    const selfSpeed = Math.hypot(this.predicted.vel.x, this.predicted.vel.z);
+    this.weapon.update(dt, { speed: selfSpeed, yaw: this.input.yaw, pitch: this.input.pitch });
+    if (this.selfAlive && this.input.locked) this.sfx.footsteps(dt, selfSpeed);
     this.hud.setLatency(this.net.latency);
   }
 
@@ -257,6 +255,7 @@ export class Match {
     }
     this.sfx.shoot(this.selfWeapon);
     this.shake.add(w.pellets > 1 ? 0.28 : 0.16);
+    this.hud.crosshairKick();
 
     this.selfAmmo = Math.max(0, this.selfAmmo - 1);
     this.hud.setAmmo(this.selfAmmo, w.magazine);

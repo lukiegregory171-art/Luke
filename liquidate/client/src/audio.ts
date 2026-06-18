@@ -1,14 +1,22 @@
 /**
  * Tiny synthesized sound effects via the Web Audio API — no asset files. The
- * context is created lazily and resumed on the first user gesture (the menu
- * click), as browsers require.
+ * context is created lazily and resumed on the first user gesture (browsers
+ * require it). Everything routes through a master gain so volume/mute (P6) work.
+ *
+ * P6 adds: master volume + mute, UI click feedback, movement footsteps, and a
+ * low ambient arena hum.
  */
 
-import type { WeaponId } from '@liquidate/shared';
+import { MOVE_SPEED, type WeaponId } from '@liquidate/shared';
 
 export class Sfx {
   private ctx?: AudioContext;
+  private master?: GainNode;
   private noise?: AudioBuffer;
+  private ambient?: { osc: OscillatorNode; sub: OscillatorNode; gain: GainNode };
+  private stepAcc = 0;
+  private volume = 0.7;
+  private muted = false;
   enabled = true;
 
   /** Call from a user gesture so the AudioContext is allowed to start. */
@@ -19,9 +27,30 @@ export class Sfx {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
       this.ctx = new Ctor();
+      this.master = this.ctx.createGain();
+      this.master.connect(this.ctx.destination);
+      this.applyGain();
       this.noise = this.makeNoise(this.ctx);
     }
     void this.ctx.resume();
+  }
+
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    this.applyGain();
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    this.applyGain();
+  }
+
+  private applyGain(): void {
+    if (this.master) this.master.gain.value = this.muted ? 0 : this.volume;
+  }
+
+  private get out(): AudioNode | undefined {
+    return this.master ?? this.ctx?.destination;
   }
 
   private makeNoise(ctx: AudioContext): AudioBuffer {
@@ -31,14 +60,9 @@ export class Sfx {
     return buf;
   }
 
-  private tone(
-    freq: number,
-    dur: number,
-    type: OscillatorType,
-    gain = 0.2,
-    slideTo?: number,
-  ): void {
-    if (!this.enabled || !this.ctx) return;
+  private tone(freq: number, dur: number, type: OscillatorType, gain = 0.2, slideTo?: number): void {
+    const out = this.out;
+    if (!this.enabled || !this.ctx || !out) return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -47,13 +71,14 @@ export class Sfx {
     if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.ctx.destination);
+    osc.connect(g).connect(out);
     osc.start(t);
     osc.stop(t + dur);
   }
 
   private burst(dur: number, gain: number, freq: number): void {
-    if (!this.enabled || !this.ctx || !this.noise) return;
+    const out = this.out;
+    if (!this.enabled || !this.ctx || !this.noise || !out) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noise;
@@ -63,7 +88,7 @@ export class Sfx {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(filter).connect(g).connect(this.ctx.destination);
+    src.connect(filter).connect(g).connect(out);
     src.start(t);
     src.stop(t + dur);
   }
@@ -93,5 +118,56 @@ export class Sfx {
 
   death(): void {
     this.tone(200, 0.4, 'sawtooth', 0.22, 70);
+  }
+
+  /** Short UI click (button presses). */
+  ui(): void {
+    this.tone(660, 0.025, 'square', 0.08);
+  }
+
+  /** Soft footstep thud, timed by movement speed. Call every frame. */
+  footsteps(dt: number, speed: number): void {
+    if (speed < 1.2) {
+      this.stepAcc = 0;
+      return;
+    }
+    const interval = 0.34 - Math.min(speed / MOVE_SPEED, 1) * 0.1; // faster = quicker steps
+    this.stepAcc += dt;
+    if (this.stepAcc >= interval) {
+      this.stepAcc = 0;
+      this.burst(0.05, 0.05, 180);
+    }
+  }
+
+  /** Start a low arena hum (during a match). Idempotent. */
+  startAmbient(): void {
+    const out = this.out;
+    if (!this.ctx || !out || this.ambient) return;
+    const osc = this.ctx.createOscillator();
+    const sub = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 58;
+    sub.type = 'sine';
+    sub.frequency.value = 87; // a soft fifth above for body
+    gain.gain.value = 0.05;
+    osc.connect(gain);
+    sub.connect(gain);
+    gain.connect(out);
+    osc.start();
+    sub.start();
+    this.ambient = { osc, sub, gain };
+  }
+
+  /** Stop the arena hum. */
+  stopAmbient(): void {
+    if (!this.ambient || !this.ctx) return;
+    const { osc, sub, gain } = this.ambient;
+    const t = this.ctx.currentTime;
+    gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    osc.stop(t + 0.32);
+    sub.stop(t + 0.32);
+    this.ambient = undefined;
   }
 }

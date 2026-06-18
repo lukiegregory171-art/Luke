@@ -110,11 +110,9 @@ export class Practice {
     if (!this.bot.alive && this.bot.respawnTimer <= 0) this.bot.respawn(this.map.spawns[1].pos);
 
     this.syncCamera();
-    this.gun.update(dt, {
-      speed: Math.hypot(this.player.vel.x, this.player.vel.z),
-      yaw: this.input.yaw,
-      pitch: this.input.pitch,
-    });
+    const speed = Math.hypot(this.player.vel.x, this.player.vel.z);
+    this.gun.update(dt, { speed, yaw: this.input.yaw, pitch: this.input.pitch });
+    if (this.alive && this.input.locked) this.sfx.footsteps(dt, speed);
   }
 
   private stepPlayer(step: number): void {
@@ -163,6 +161,7 @@ export class Practice {
     for (const e of ends) this.impacts.spawn(e, 'surface');
     this.sfx.shoot(this.weapon);
     this.shake.add(w.pellets > 1 ? 0.28 : 0.16);
+    this.hud.crosshairKick();
 
     if (damage > 0 && this.bot.alive) {
       this.hud.hit(headshot);

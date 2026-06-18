@@ -22,6 +22,7 @@ import { AssetManager } from './assets';
 import { MANIFEST } from './manifest';
 import { PerfHud } from './perf';
 import { QUALITY_LEVELS, savedQuality, type QualityLevel } from './quality';
+import { SettingsStore } from './settings';
 import { Input } from './input';
 import { Weapon } from './weapon';
 import { Hud } from './hud';
@@ -64,6 +65,12 @@ const opponent = new Opponent(world.scene);
 const impacts = new Impacts(world.scene);
 const shake = new Shake();
 const lobby = new Lobby();
+
+// Player preferences (P6): audio volume/mute + mouse sensitivity, persisted.
+const settings = new SettingsStore();
+input.sensitivity = settings.sensitivityRadians;
+sfx.setVolume(settings.volume);
+sfx.setMuted(settings.muted);
 
 // Asset pipeline (P1). The manifest is empty today (procedural art), so this
 // preloads nothing yet — but the loaders + loading screen are wired so a real
@@ -150,6 +157,7 @@ function startMatch(stake: number): void {
       setState('playing');
       showCard(null);
       hud.show(true);
+      sfx.startAmbient();
     },
     onOver: showOver,
     onSnapshot: () => window.__liq!.snaps++,
@@ -169,6 +177,7 @@ function startPractice(): void {
   setState('playing');
   showCard(null);
   hud.show(true);
+  sfx.startAmbient();
   input.requestLock();
 }
 
@@ -177,6 +186,7 @@ function showOver(result: MatchResult): void {
   mode = null;
   match = null;
   hud.show(false);
+  sfx.stopAmbient();
   resumeHint.classList.add('hidden');
   window.__liq!.net = result.net;
   const title = document.getElementById('over-title') as HTMLElement;
@@ -199,6 +209,7 @@ function backToLobby(): void {
   gun.reset(); // retire any lingering tracers (back to the pool)
   impacts.reset();
   shake.reset();
+  sfx.stopAmbient();
   hud.show(false);
   showCard(cardMenu);
 }
@@ -215,6 +226,38 @@ qualitySel.addEventListener('change', () => {
   if (QUALITY_LEVELS.includes(qualitySel.value as QualityLevel)) {
     world.applyQuality(qualitySel.value as QualityLevel);
   }
+});
+
+// Audio + sensitivity settings (P6).
+const volEl = document.getElementById('opt-volume') as HTMLInputElement;
+const muteEl = document.getElementById('opt-mute') as HTMLInputElement;
+const sensEl = document.getElementById('opt-sens') as HTMLInputElement;
+volEl.value = String(Math.round(settings.volume * 100));
+muteEl.checked = settings.muted;
+sensEl.value = String(Math.round(settings.sensitivity * 100));
+volEl.addEventListener('input', () => {
+  settings.volume = Number(volEl.value) / 100;
+  sfx.setVolume(settings.volume);
+});
+muteEl.addEventListener('change', () => {
+  settings.muted = muteEl.checked;
+  sfx.setMuted(settings.muted);
+});
+sensEl.addEventListener('input', () => {
+  settings.sensitivity = Number(sensEl.value) / 100;
+  input.sensitivity = settings.sensitivityRadians;
+});
+
+// UI click feedback: resume audio on the first gesture, then click on buttons.
+let audioArmed = false;
+document.addEventListener('pointerdown', (e) => {
+  if (!audioArmed) {
+    sfx.resume();
+    sfx.setVolume(settings.volume);
+    sfx.setMuted(settings.muted);
+    audioArmed = true;
+  }
+  if ((e.target as HTMLElement).closest('button')) sfx.ui();
 });
 
 // --- Cosmetics (M5: skins, optionally devnet-token gated) ------------------

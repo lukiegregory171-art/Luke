@@ -45,6 +45,28 @@ body {
 #damage.show {
   animation: damage 0.45s ease-out;
 }
+
+/* --- Low-health vignette (pulses while critical) -------------------------- */
+#lowhp {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 52%, rgba(224, 30, 60, 0.5));
+}
+#lowhp.show {
+  animation: lowhp 1.1s ease-in-out infinite;
+}
+@keyframes lowhp {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
 @keyframes damage {
   0% {
     opacity: 1;
@@ -69,6 +91,17 @@ body {
   width: 26px;
   height: 26px;
   transform: translate(-50%, -50%);
+}
+#crosshair.kick {
+  animation: chkick 0.18s ease-out;
+}
+@keyframes chkick {
+  0% {
+    transform: translate(-50%, -50%) scale(1.7);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 #crosshair .ch {
   position: absolute;
@@ -633,6 +666,29 @@ button.ghost:hover {
 }
 .lobby-graphics .hint {
   color: #4a5662;
+}
+
+.lobby-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  justify-content: center;
+  margin-top: 0.7rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #6b7a89;
+}
+.lobby-options .opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.lobby-options input[type='range'] {
+  width: 92px;
+  accent-color: var(--accent);
+}
+.lobby-options input[type='checkbox'] {
+  accent-color: var(--accent);
 }
 
 .spinner {

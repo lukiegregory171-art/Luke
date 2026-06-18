@@ -60,6 +60,7 @@ function harness() {
     banner: vi.fn(),
     damageFlash: vi.fn(),
     damageFrom: vi.fn(),
+    crosshairKick: vi.fn(),
   } as unknown as Hud;
   const sfx = {
     shoot: vi.fn(),
@@ -68,6 +69,7 @@ function harness() {
     dash: vi.fn(),
     kill: vi.fn(),
     death: vi.fn(),
+    footsteps: vi.fn(),
   } as unknown as Sfx;
 
   const impacts = new Impacts(world.scene);
