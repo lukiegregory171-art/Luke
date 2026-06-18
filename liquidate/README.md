@@ -225,6 +225,34 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
   bundled server, the built client, and prod deps; the Node server serves both
   on one port. See *Deploy* below.
 
+## Production polish (P-series)
+
+A presentation pass on top of the finished game. **Client-only** — it never
+touches authority; an automated guardrail test asserts `shared/` and `server/`
+import no rendering/DOM code, so visuals can't change a hitbox, damage, or
+outcome.
+
+### Done (P0 — Rendering foundation)
+
+- **Color management**: linear workflow, sRGB output, **ACES filmic** tone
+  mapping (via the post stack).
+- **PBR + image-based lighting**: metalness/roughness materials lit by a
+  procedural `RoomEnvironment` (PMREM) for ambient + reflections — zero external
+  art, with `scene.environment` as the drop-in slot for a real HDRI.
+- **Light rig + soft shadows**: warm key (sun) with PCF shadow maps, cool
+  hemisphere fill, neon rim, ambient lift.
+- **Post stack** (pmndrs `postprocessing`): bloom on the neon, SMAA, vignette,
+  film grain, ACES tone-map — each gated per preset.
+- **Quality presets** Low/Medium/High/Ultra (scale resolution, shadows, effects)
+  + **dynamic resolution scaling** to hold frame rate; selector in the lobby.
+- **Perf HUD** (fps / frame time / draw calls / triangles / textures) — toggle
+  with the **backtick** key.
+
+LIMITATION: SSAO/GTAO, motion blur, and full cascaded shadow maps are deferred
+to a follow-up (a single tight shadow cascade suffices for this small arena);
+real 60fps numbers need real-GPU hardware (headless software-GL isn't
+representative). See `ATTRIBUTION.md`.
+
 ## Deploy
 
 The repo builds to a single Node server that serves the client and the
