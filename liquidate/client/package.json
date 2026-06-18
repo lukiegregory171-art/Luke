@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@liquidate/shared": "*",
+    "n8ao": "^1.10.2",
     "postprocessing": "^6.39.1",
     "stats.js": "^0.17.0",
     "three": "^0.169.0"

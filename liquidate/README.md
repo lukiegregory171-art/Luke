@@ -241,17 +241,26 @@ outcome.
   art, with `scene.environment` as the drop-in slot for a real HDRI.
 - **Light rig + soft shadows**: warm key (sun) with PCF shadow maps, cool
   hemisphere fill, neon rim, ambient lift.
-- **Post stack** (pmndrs `postprocessing`): bloom on the neon, SMAA, vignette,
-  film grain, ACES tone-map — each gated per preset.
+- **Post stack** (pmndrs `postprocessing` + `n8ao`): **SSAO** (ground-contact
+  ambient occlusion, high/ultra), bloom on the neon, SMAA, vignette, film grain,
+  ACES tone-map — each gated per preset.
 - **Quality presets** Low/Medium/High/Ultra (scale resolution, shadows, effects)
   + **dynamic resolution scaling** to hold frame rate; selector in the lobby.
 - **Perf HUD** (fps / frame time / draw calls / triangles / textures) — toggle
   with the **backtick** key.
 
-LIMITATION: SSAO/GTAO, motion blur, and full cascaded shadow maps are deferred
-to a follow-up (a single tight shadow cascade suffices for this small arena);
-real 60fps numbers need real-GPU hardware (headless software-GL isn't
-representative). See `ATTRIBUTION.md`.
+LIMITATION:
+- **Cascaded shadow maps** were implemented and then reverted: `three`'s CSM
+  assumes every directional light is one of its cascades, which conflicts with
+  the scene's neon **rim** directional light (out-of-range `CSM_cascades[]`
+  shader error) — and a tuned single shadow cascade is ample for this small
+  enclosed arena. We ship the single cascade; CSM is worth revisiting only if
+  maps grow large (and the light rig is reworked).
+- **Motion blur** is deferred: the render stack has no clean velocity-buffer
+  path, and it's a competitive-FPS anti-feature (the base spec itself lists it
+  as a P6 *toggle*). Not faked.
+- Real 60fps numbers need real-GPU hardware (headless software-GL isn't
+  representative). See `ATTRIBUTION.md`.
 
 ## Deploy
 

@@ -25,6 +25,7 @@ import {
   VignetteEffect,
   BlendFunction,
 } from 'postprocessing';
+import { N8AOPostPass } from 'n8ao';
 import type { GameMap } from '@liquidate/shared';
 import {
   QUALITY,
@@ -130,6 +131,7 @@ export class World {
     this.fitShadowCamera(map);
   }
 
+  /** Fit the (single-cascade) shadow camera tightly to the arena for crisp shadows. */
   private fitShadowCamera(map: GameMap): void {
     const r = Math.max(map.width, map.depth) * 0.62;
     const cam = this.key.shadow.camera;
@@ -145,15 +147,13 @@ export class World {
 
   private buildArena(map: GameMap): void {
     // Polished dark-metal floor (reflects the environment + neon).
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(map.width, map.depth),
-      new THREE.MeshStandardMaterial({
-        color: 0x1b2735,
-        metalness: 0.35,
-        roughness: 0.5,
-        envMapIntensity: 1.2,
-      }),
-    );
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x1b2735,
+      metalness: 0.35,
+      roughness: 0.5,
+      envMapIntensity: 1.2,
+    });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(map.width, map.depth), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.arena.add(floor);
@@ -235,6 +235,17 @@ export class World {
     this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType });
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
+    // Ground-contact ambient occlusion (high/ultra) — darkens crevices and where
+    // cover meets the floor. Applied to the linear render before bloom/tonemap.
+    if (this.quality.ssao) {
+      const ao = new N8AOPostPass(this.scene, this.camera, window.innerWidth, window.innerHeight);
+      ao.configuration.aoRadius = 1.6;
+      ao.configuration.distanceFalloff = 1.0;
+      ao.configuration.intensity = 2.4;
+      ao.setQualityMode(this.level === 'ultra' ? 'High' : 'Medium');
+      this.composer.addPass(ao);
+    }
+
     const effects = [];
     if (this.quality.bloom) {
       effects.push(
@@ -265,12 +276,12 @@ export class World {
     saveQuality(level);
 
     this.renderer.shadowMap.enabled = this.quality.shadows;
-    this.key.castShadow = this.quality.shadows;
     if (this.key.shadow.mapSize.x !== this.quality.shadowMapSize) {
       this.key.shadow.mapSize.set(this.quality.shadowMapSize, this.quality.shadowMapSize);
       this.key.shadow.map?.dispose();
       this.key.shadow.map = null;
     }
+    this.key.castShadow = this.quality.shadows;
 
     this.dpr = Math.min(window.devicePixelRatio, this.quality.maxPixelRatio);
     this.renderScale = 1;
