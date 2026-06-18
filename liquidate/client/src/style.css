@@ -649,3 +649,55 @@ button.ghost:hover {
     transform: rotate(360deg);
   }
 }
+
+/* --- Boot loading screen (P1) --------------------------------------------- */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 30%, rgba(16, 32, 43, 0.95), #05070a 70%);
+  transition: opacity 0.45s ease;
+}
+#loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+.loading-box {
+  text-align: center;
+  width: min(420px, 80vw);
+}
+.loading-box h1 {
+  margin: 0;
+  font-size: 3rem;
+  letter-spacing: 0.35em;
+  font-weight: 800;
+  color: var(--accent);
+  text-shadow: 0 0 28px var(--accent-dim);
+}
+.loading-box .sub {
+  margin: 0.4rem 0 1.8rem;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  color: #7c8a98;
+}
+.loading-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(22, 224, 163, 0.15);
+  overflow: hidden;
+}
+#loading-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-dim);
+  transition: width 0.25s ease;
+}
+.loading-label {
+  margin-top: 0.9rem;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  color: #7c8a98;
+}

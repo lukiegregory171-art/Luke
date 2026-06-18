@@ -9,6 +9,17 @@
   <body>
     <div id="game"></div>
 
+    <!-- Boot loading screen (P1): asset preload + shader warmup. Removed once
+         the renderer is primed so the first played frame never stutters. -->
+    <div id="loading">
+      <div class="loading-box">
+        <h1>LIQUIDATE</h1>
+        <p class="sub">SERVER-AUTHORITATIVE 1V1 · PLAY-MONEY DEMO</p>
+        <div class="loading-bar"><div id="loading-fill"></div></div>
+        <div id="loading-label" class="loading-label">Booting…</div>
+      </div>
+    </div>
+
     <!-- Damage flash (full-screen red vignette) -->
     <div id="damage"></div>
 

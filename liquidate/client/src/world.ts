@@ -314,6 +314,18 @@ export class World {
     this.composer.setSize(window.innerWidth, window.innerHeight);
   };
 
+  /**
+   * Compile shaders + prime the post stack before the first real frame (P1), so
+   * pointer-lock doesn't begin with a multi-hundred-ms stutter while the GPU
+   * links programs (SMAA/bloom/AO/tonemap all compile on first use). Called once
+   * behind the loading screen.
+   */
+  async warmup(): Promise<void> {
+    await this.renderer.compileAsync(this.scene, this.camera);
+    this.renderer.info.reset();
+    this.composer.render(0.016);
+  }
+
   render(dt: number): void {
     this.perf.begin();
     const dtMs = Math.min(dt * 1000, 100);

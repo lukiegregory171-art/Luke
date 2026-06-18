@@ -1,11 +1,17 @@
 /**
- * First-person weapon viewmodel plus shot feedback: muzzle flash, a fading
- * tracer beam, and a little recoil kick. Purely cosmetic — the authoritative
+ * First-person weapon viewmodel plus shot feedback: muzzle flash, fading
+ * tracer beams, and a little recoil kick. Purely cosmetic — the authoritative
  * hit math lives in @liquidate/shared.
+ *
+ * P1: tracers are pooled. A fixed set of meshes shares ONE unit-cylinder
+ * geometry (scaled along its length per shot) so firing allocates nothing — no
+ * geometry/material/Vector3 churn mid-match, no GC hitches. Reused scratch
+ * vectors keep the hot path allocation-free.
  */
 
 import * as THREE from 'three';
 import type { Vec3 } from '@liquidate/shared';
+import { Pool } from './pool';
 
 interface Tracer {
   mesh: THREE.Mesh;
@@ -14,13 +20,26 @@ interface Tracer {
 }
 
 const TRACER_LIFE = 0.07;
+const TRACER_PREWARM = 24; // covers a shotgun blast + overlapping rifle fire
+const UP = new THREE.Vector3(0, 1, 0);
 
 export class Weapon {
   private readonly group = new THREE.Group();
   private readonly muzzle = new THREE.Object3D();
   private readonly flash: THREE.Mesh;
   private readonly flashLight: THREE.PointLight;
-  private readonly tracers: Tracer[] = [];
+
+  // Pooled tracers: one shared geometry, per-mesh material, all parented to a
+  // group that stays in the scene; we toggle visibility rather than add/remove.
+  private readonly tracerGroup = new THREE.Group();
+  private readonly tracerGeo: THREE.CylinderGeometry;
+  private readonly tracerPool: Pool<Tracer>;
+  private readonly expired: Tracer[] = [];
+
+  // Scratch vectors reused every shot (no per-shot allocation).
+  private readonly vFrom = new THREE.Vector3();
+  private readonly vTo = new THREE.Vector3();
+  private readonly vDir = new THREE.Vector3();
 
   // Recoil state (smoothly returns to zero).
   private recoil = 0;
@@ -78,6 +97,32 @@ export class Weapon {
 
     // Camera must be in the scene graph for its children to render.
     this.scene.add(this.camera);
+
+    // Tracer pool: a unit cylinder (length 1 along +Y, open-ended) scaled per
+    // shot; each pooled mesh owns its material so it can fade independently.
+    this.scene.add(this.tracerGroup);
+    this.tracerGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 6, 1, true);
+    this.tracerPool = new Pool<Tracer>(
+      () => {
+        const mat = new THREE.MeshBasicMaterial({
+          color: 0xbafff0,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(this.tracerGeo, mat);
+        mesh.visible = false;
+        mesh.frustumCulled = false; // thin + always near camera; skip the cull test
+        this.tracerGroup.add(mesh);
+        return { mesh, age: 0, life: TRACER_LIFE };
+      },
+      (t) => {
+        t.mesh.visible = false;
+        t.age = 0;
+      },
+      TRACER_PREWARM,
+    );
   }
 
   /** World-space position of the muzzle, for spawning a tracer. */
@@ -102,41 +147,44 @@ export class Weapon {
   /** Single-tracer shot (rifle, or any pinpoint weapon). */
   fire(hitPoint: Vec3): void {
     this.flashAndKick(0.05);
-    this.spawnTracer(this.muzzleWorldPosition(), hitPoint);
+    this.muzzleWorldPosition(this.vFrom);
+    this.spawnTracer(this.vFrom, hitPoint);
   }
 
   /** Multi-tracer shot (shotgun pellets) sharing one muzzle flash. */
   fireMany(endpoints: Vec3[]): void {
     this.flashAndKick(0.09);
-    const from = this.muzzleWorldPosition();
-    for (const end of endpoints) this.spawnTracer(from, end);
+    this.muzzleWorldPosition(this.vFrom);
+    for (const end of endpoints) this.spawnTracer(this.vFrom, end);
   }
 
   /** Render a tracer for another player's shot (world-space origin and endpoint). */
   spawnWorldTracer(from: Vec3, to: Vec3): void {
-    this.spawnTracer(new THREE.Vector3(from.x, from.y, from.z), to);
+    this.vFrom.set(from.x, from.y, from.z);
+    this.spawnTracer(this.vFrom, to);
   }
 
   private spawnTracer(from: THREE.Vector3, to: Vec3): void {
-    const target = new THREE.Vector3(to.x, to.y, to.z);
-    const dir = new THREE.Vector3().subVectors(target, from);
-    const len = dir.length();
+    this.vTo.set(to.x, to.y, to.z);
+    this.vDir.subVectors(this.vTo, from);
+    const len = this.vDir.length();
     if (len < 1e-3) return;
 
-    const geo = new THREE.CylinderGeometry(0.012, 0.012, len, 6, 1, true);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xbafff0,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    // A cylinder is built along +Y; orient it along the shot direction.
-    mesh.position.copy(from).addScaledVector(dir, 0.5);
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-    this.scene.add(mesh);
-    this.tracers.push({ mesh, age: 0, life: TRACER_LIFE });
+    const t = this.tracerPool.acquire();
+    const mesh = t.mesh;
+    // Position at the midpoint, orient +Y along the shot, scale Y to length.
+    mesh.position.copy(from).addScaledVector(this.vDir, 0.5);
+    mesh.quaternion.setFromUnitVectors(UP, this.vDir.divideScalar(len));
+    mesh.scale.set(1, len, 1);
+    mesh.visible = true;
+    (mesh.material as THREE.MeshBasicMaterial).opacity = 0.9;
+    t.age = 0;
+    t.life = TRACER_LIFE;
+  }
+
+  /** Retire every live tracer (e.g. on match end / return to lobby). */
+  reset(): void {
+    this.tracerPool.releaseAll();
   }
 
   update(dt: number): void {
@@ -151,19 +199,15 @@ export class Weapon {
     this.group.position.z = -0.45 + this.recoil;
     this.group.rotation.x = this.recoil * 1.2;
 
-    // Fade + retire tracers.
-    for (let i = this.tracers.length - 1; i >= 0; i--) {
-      const tr = this.tracers[i];
-      tr.age += dt;
-      const k = 1 - tr.age / tr.life;
-      if (k <= 0) {
-        this.scene.remove(tr.mesh);
-        tr.mesh.geometry.dispose();
-        (tr.mesh.material as THREE.Material).dispose();
-        this.tracers.splice(i, 1);
-      } else {
-        (tr.mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * k;
-      }
-    }
+    // Fade active tracers; collect the expired and release them back to the pool
+    // (no allocation — `expired` is a reused buffer).
+    this.expired.length = 0;
+    this.tracerPool.forEachActive((t) => {
+      t.age += dt;
+      const k = 1 - t.age / t.life;
+      if (k <= 0) this.expired.push(t);
+      else (t.mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * k;
+    });
+    for (const t of this.expired) this.tracerPool.release(t);
   }
 }

@@ -16,6 +16,8 @@ import {
   type ServerMessage,
 } from '@liquidate/shared';
 import { World } from './world';
+import { AssetManager } from './assets';
+import { MANIFEST } from './manifest';
 import { PerfHud } from './perf';
 import { QUALITY_LEVELS, savedQuality, type QualityLevel } from './quality';
 import { Input } from './input';
@@ -56,6 +58,12 @@ const sfx = new Sfx();
 const net = new Net();
 const opponent = new Opponent(world.scene);
 const lobby = new Lobby();
+
+// Asset pipeline (P1). The manifest is empty today (procedural art), so this
+// preloads nothing yet — but the loaders + loading screen are wired so a real
+// `.glb`/`.ktx2` registered in manifest.ts loads with progress, no code change.
+const assets = new AssetManager(world.renderer);
+assets.register(MANIFEST);
 
 const overlay = document.getElementById('overlay') as HTMLElement;
 const cardMenu = document.getElementById('card-menu') as HTMLElement;
@@ -182,6 +190,7 @@ function backToLobby(): void {
   setState('lobby');
   mode = null;
   match = null;
+  gun.reset(); // retire any lingering tracers (back to the pool)
   hud.show(false);
   showCard(cardMenu);
 }
@@ -256,6 +265,30 @@ if (TOKEN_ENABLED) {
     if (addr.value.trim()) void loadBalance(addr.value.trim());
   });
 }
+
+// --- Boot: preload assets + warm the renderer behind the loading screen (P1) ---
+const loadingEl = document.getElementById('loading') as HTMLElement;
+const loadingFill = document.getElementById('loading-fill') as HTMLElement;
+const loadingLabel = document.getElementById('loading-label') as HTMLElement;
+
+async function boot(): Promise<void> {
+  // Assets take the first 80% of the bar; shader warmup the last 20%.
+  await assets.preloadCritical((p) => {
+    loadingFill.style.width = `${Math.round(p.fraction * 80)}%`;
+    loadingLabel.textContent = p.label;
+  });
+  loadingLabel.textContent = 'Warming renderer…';
+  try {
+    await world.warmup();
+  } catch {
+    // Warmup is an optimisation; never let it block reaching the lobby.
+  }
+  loadingFill.style.width = '100%';
+  loadingLabel.textContent = 'Ready';
+  loadingEl.classList.add('done');
+  setTimeout(() => loadingEl.classList.add('hidden'), 500);
+}
+void boot();
 
 // --- Frame loop ------------------------------------------------------------
 let last = performance.now();

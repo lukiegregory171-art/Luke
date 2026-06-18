@@ -14,10 +14,14 @@ looks are procedural / engine-generated:
 - Materials, the neon grid, and obstacle edges are shader/material-based.
 - Audio is synthesized at runtime via the Web Audio API (no sample files).
 
+As of P1 the asset *pipeline* exists (manifest-driven glTF + Draco/meshopt +
+KTX2 loading, LRU cache, lazy cosmetics — see `client/src/assets.ts`), but the
+manifest (`client/src/manifest.ts`) is empty: still **no external art**. Layout
+and how to register assets are documented in [`docs/assets.md`](docs/assets.md).
+
 When real assets are added, list each here with **source, author, license**
 (prefer CC0 / permissive — Poly Haven, Quaternius, Kenney, freesound CC0) and
-keep the matching files under `client/public/assets/` (see the assets layout in
-the README).
+keep the matching files under `client/public/assets/` (see `docs/assets.md`).
 
 ## Libraries (npm, not bundled art)
 
