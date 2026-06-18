@@ -32,12 +32,20 @@ interface Tracer {
 const TRACER_LIFE = 0.07;
 const TRACER_PREWARM = 24; // covers a shotgun blast + overlapping rifle fire
 const UP = new THREE.Vector3(0, 1, 0);
+const ACCENT_DEFAULT = 0x16e0a3;
+const TRACER_BASE = 0xbafff0;
+const WHITE = new THREE.Color(0xffffff);
 
 export class Weapon {
   private readonly group = new THREE.Group();
   private readonly muzzle = new THREE.Object3D();
   private readonly flash: THREE.Mesh;
   private readonly flashLight: THREE.PointLight;
+  private readonly accentMat: THREE.MeshStandardMaterial;
+
+  // Skin accent (P4): the viewmodel's energy bits + tracers retint to this.
+  private accentValue = ACCENT_DEFAULT;
+  private readonly tracerColor = new THREE.Color(TRACER_BASE);
 
   // Pooled tracers: one shared geometry, per-mesh material, all parented to a
   // group that stays in the scene; we toggle visibility rather than add/remove.
@@ -76,11 +84,12 @@ export class Weapon {
       roughness: 0.5,
       metalness: 0.6,
     });
-    const accentMat = new THREE.MeshStandardMaterial({
-      color: 0x16e0a3,
+    this.accentMat = new THREE.MeshStandardMaterial({
+      color: ACCENT_DEFAULT,
       emissive: 0x0c5a42,
       roughness: 0.4,
     });
+    const accentMat = this.accentMat;
 
     const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.5), bodyMat);
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.45), bodyMat);
@@ -156,6 +165,29 @@ export class Weapon {
     this.flashScale = id === 'shotgun' ? 1.7 : 1;
   }
 
+  /**
+   * Retint the viewmodel's accent + tracers to a skin colour (P4). Cosmetic and
+   * client-local — never sent to the server, never affects aim or hits. Tracers
+   * use a lightened accent so they stay readable on any skin.
+   */
+  setAccent(hex: number): void {
+    this.accentValue = hex;
+    const c = new THREE.Color(hex);
+    this.accentMat.color.copy(c);
+    this.accentMat.emissive.copy(c).multiplyScalar(0.35);
+    this.tracerColor.copy(c).lerp(WHITE, 0.5);
+  }
+
+  /** Current accent (for tests / inspection). */
+  get accent(): number {
+    return this.accentValue;
+  }
+
+  /** Current tracer colour as 0xRRGGBB (for tests / inspection). */
+  get tracerColorHex(): number {
+    return this.tracerColor.getHex();
+  }
+
   private flashAndKick(kick: number): void {
     const mat = this.flash.material as THREE.MeshBasicMaterial;
     mat.opacity = 1;
@@ -198,7 +230,9 @@ export class Weapon {
     mesh.quaternion.setFromUnitVectors(UP, this.vDir.divideScalar(len));
     mesh.scale.set(1, len, 1);
     mesh.visible = true;
-    (mesh.material as THREE.MeshBasicMaterial).opacity = 0.9;
+    const mat = mesh.material as THREE.MeshBasicMaterial;
+    mat.color.copy(this.tracerColor);
+    mat.opacity = 0.9;
     t.age = 0;
     t.life = TRACER_LIFE;
   }

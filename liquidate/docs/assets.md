@@ -86,6 +86,27 @@ signals `Character.update()` already consumes. The procedural rig stays the
 zero-asset fallback. Quaternius has CC0 rigged characters; Mixamo provides free
 animations (check its license terms before shipping).
 
+## Skins (P4)
+
+Skins are **data** (`shared/src/cosmetics.ts` → `SKINS`): id, name, CSS `color`,
+and a cosmetic unlock threshold. Adding a skin = adding an entry. `accentHex()`
+turns the colour into a 3D hue; `theme()` in `main.ts` applies it to the UI
+accent (CSS), the arena neon (`world.setAccent`), and the viewmodel + tracers
+(`weapon.setAccent`).
+
+Cosmetic-only and **not** pay-to-win, by construction:
+
+- A skin is **client-local** — never sent to the server (the wire protocol and
+  server have no skin field), so it cannot affect movement, hits, or outcome.
+- It never changes the **opponent's** appearance; the enemy stays a fixed,
+  readable colour regardless of either player's skin. No visibility edge.
+- `tests/skins.test.ts` asserts a skin carries only presentation fields.
+
+**Textured skins later:** a richer skin could swap in a `.ktx2`-textured
+material or a whole `.glb` weapon via the `AssetManager` — register it in the
+manifest and extend `weapon.setAccent`/the theme path. Procedural colour tinting
+is the zero-asset default.
+
 ## Attribution
 
 Every external asset added MUST be logged in `ATTRIBUTION.md` with source,

@@ -11,9 +11,11 @@
 import {
   DEFAULT_MAP,
   SKINS,
+  accentHex,
   isSkinUnlocked,
   randomMap,
   type ServerMessage,
+  type Skin,
 } from '@liquidate/shared';
 import { World } from './world';
 import { AssetManager } from './assets';
@@ -218,7 +220,17 @@ qualitySel.addEventListener('change', () => {
 // --- Cosmetics (M5: skins, optionally devnet-token gated) ------------------
 let tokenBalance = 0;
 let selectedSkin = savedSkin();
-applySkin(selectedSkin);
+
+// Apply a skin everywhere it shows: UI accent (CSS) + in-world neon + viewmodel
+// energy/tracers. All client-local cosmetics — the skin is never sent to the
+// server and never touches the opponent's (fixed, readable) appearance.
+function theme(skin: Skin): void {
+  applySkin(skin);
+  const hx = accentHex(skin);
+  world.setAccent(hx);
+  gun.setAccent(hx);
+}
+theme(selectedSkin);
 
 const skinsEl = document.getElementById('skins') as HTMLElement;
 function renderSkins(): void {
@@ -233,7 +245,7 @@ function renderSkins(): void {
     if (unlocked) {
       b.addEventListener('click', () => {
         selectedSkin = skin;
-        applySkin(skin);
+        theme(skin);
         renderSkins();
       });
     }

@@ -27,6 +27,15 @@ export function skinById(id: string): Skin | undefined {
   return SKINS.find((s) => s.id === id);
 }
 
+/**
+ * The skin's accent as a 0xRRGGBB number, for tinting 3D materials/lights
+ * (the CSS string `color` drives the DOM; this is the same hue for the engine).
+ * Pure data — no rendering dependency, so it lives here in shared.
+ */
+export function accentHex(skin: Skin): number {
+  return parseInt(skin.color.replace('#', ''), 16);
+}
+
 /** Whether a skin is unlocked at the given devnet token balance. */
 export function isSkinUnlocked(skin: Skin, tokenBalance: number): boolean {
   return skin.requires === 0 || tokenBalance >= skin.requires;

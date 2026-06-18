@@ -46,11 +46,17 @@ export class World {
   private composer!: EffectComposer;
   private readonly arena = new THREE.Group();
   private readonly key: THREE.DirectionalLight;
+  private readonly rim: THREE.DirectionalLight;
   private quality: QualitySettings;
   private level: QualityLevel;
   private renderScale = 1;
   private avgMs = 16.7;
   private dpr = Math.min(window.devicePixelRatio, 2);
+
+  // Skin accent (P4): neon grid + obstacle edges + rim light retint to this.
+  // Cosmetic only — never affects geometry the server collides against.
+  private accent = ACCENT;
+  private accentMats: THREE.Material[] = [];
 
   constructor(
     private readonly container: HTMLElement,
@@ -96,10 +102,10 @@ export class World {
     this.scene.add(this.key, this.key.target);
 
     const hemi = new THREE.HemisphereLight(0xbcd8ff, 0x202832, 1.4);
-    const rim = new THREE.DirectionalLight(ACCENT, 1.0);
-    rim.position.set(-12, 9, -14);
+    this.rim = new THREE.DirectionalLight(ACCENT, 1.0);
+    this.rim.position.set(-12, 9, -14);
     const ambient = new THREE.AmbientLight(0x2a3a4e, 0.5);
-    this.scene.add(hemi, rim, ambient);
+    this.scene.add(hemi, this.rim, ambient);
 
     this.scene.add(this.arena);
 
@@ -158,16 +164,16 @@ export class World {
     floor.receiveShadow = true;
     this.arena.add(floor);
 
-    // Emissive neon grid (blooms).
-    const grid = new THREE.GridHelper(
-      Math.max(map.width, map.depth),
-      Math.max(map.width, map.depth),
-      ACCENT,
-      0x0d3b2e,
-    );
-    const gm = grid.material as THREE.Material;
-    gm.opacity = 0.35;
-    gm.transparent = true;
+    // Emissive neon grid (blooms). Built from plain line segments with a single
+    // retintable material so a skin accent can recolour it live.
+    this.accentMats = [];
+    const gridMat = new THREE.LineBasicMaterial({
+      color: this.accent,
+      transparent: true,
+      opacity: 0.3,
+    });
+    this.accentMats.push(gridMat);
+    const grid = this.buildGrid(Math.max(map.width, map.depth), gridMat);
     grid.position.y = 0.02;
     this.arena.add(grid);
 
@@ -203,10 +209,11 @@ export class World {
       envMapIntensity: 1.1,
     });
     const edgeMat = new THREE.LineBasicMaterial({
-      color: ACCENT,
+      color: this.accent,
       transparent: true,
       opacity: 0.85,
     });
+    this.accentMats.push(edgeMat);
     for (const box of map.obstacles) {
       const sx = box.max.x - box.min.x;
       const sy = box.max.y - box.min.y;
@@ -226,6 +233,33 @@ export class World {
       edges.position.copy(mesh.position);
       this.arena.add(edges);
     }
+  }
+
+  /** A floor grid as line segments sharing one (retintable) material. */
+  private buildGrid(size: number, mat: THREE.LineBasicMaterial): THREE.LineSegments {
+    const divisions = Math.round(size);
+    const step = size / divisions;
+    const half = size / 2;
+    const pts: number[] = [];
+    for (let i = 0; i <= divisions; i++) {
+      const p = -half + i * step;
+      pts.push(-half, 0, p, half, 0, p); // line along X
+      pts.push(p, 0, -half, p, 0, half); // line along Z
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return new THREE.LineSegments(geo, mat);
+  }
+
+  /**
+   * Retint the arena neon + rim light to a skin accent (P4). Cosmetic only:
+   * touches material colours and a light, never geometry or anything the server
+   * collides against. Skins are client-local and never sent to the server.
+   */
+  setAccent(hex: number): void {
+    this.accent = hex;
+    this.rim.color.setHex(hex);
+    for (const m of this.accentMats) (m as THREE.LineBasicMaterial).color.setHex(hex);
   }
 
   // --- Post-processing + quality --------------------------------------------
