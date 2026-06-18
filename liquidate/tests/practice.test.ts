@@ -8,6 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { RIFLE, type GameMap } from '@liquidate/shared';
 import { Practice } from '../client/src/practice';
+import { Impacts } from '../client/src/impacts';
+import { Shake } from '../client/src/shake';
 import type { World } from '../client/src/world';
 import type { Input } from '../client/src/input';
 import type { Weapon } from '../client/src/weapon';
@@ -68,7 +70,9 @@ function harness() {
     death: vi.fn(),
   } as unknown as Sfx;
 
-  const practice = new Practice(FLAT, world, input, gun, hud, sfx);
+  const impacts = new Impacts(world.scene);
+  const shake = new Shake();
+  const practice = new Practice(FLAT, world, input, gun, hud, sfx, impacts, shake);
   practice.bot.passive = true; // bot won't move or shoot back
   return { practice, input, gun, hud };
 }

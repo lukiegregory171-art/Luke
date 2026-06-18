@@ -1,17 +1,27 @@
 /**
  * First-person weapon viewmodel plus shot feedback: muzzle flash, fading
- * tracer beams, and a little recoil kick. Purely cosmetic — the authoritative
- * hit math lives in @liquidate/shared.
+ * tracer beams, recoil kick, and movement bob + look sway. Purely cosmetic —
+ * the authoritative hit math lives in @liquidate/shared.
  *
  * P1: tracers are pooled. A fixed set of meshes shares ONE unit-cylinder
  * geometry (scaled along its length per shot) so firing allocates nothing — no
  * geometry/material/Vector3 churn mid-match, no GC hitches. Reused scratch
  * vectors keep the hot path allocation-free.
+ *
+ * P3: the viewmodel bobs with movement speed and sways opposite to look motion
+ * (both visual-only; aim is input.yaw/pitch, untouched here).
  */
 
 import * as THREE from 'three';
-import type { Vec3 } from '@liquidate/shared';
+import { clamp, MOVE_SPEED, type Vec3 } from '@liquidate/shared';
 import { Pool } from './pool';
+
+/** Per-frame view motion that drives bob (speed) and sway (look delta). */
+export interface ViewMotion {
+  speed: number;
+  yaw: number;
+  pitch: number;
+}
 
 interface Tracer {
   mesh: THREE.Mesh;
@@ -44,6 +54,17 @@ export class Weapon {
   // Recoil state (smoothly returns to zero).
   private recoil = 0;
   private flashScale = 1;
+
+  // Viewmodel rest pose + bob/sway state (P3, cosmetic).
+  private readonly baseX = 0.22;
+  private readonly baseY = -0.2;
+  private readonly baseZ = -0.45;
+  private bobPhase = 0;
+  private swayX = 0;
+  private swayY = 0;
+  private prevYaw = 0;
+  private prevPitch = 0;
+  private haveAim = false;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -146,14 +167,14 @@ export class Weapon {
 
   /** Single-tracer shot (rifle, or any pinpoint weapon). */
   fire(hitPoint: Vec3): void {
-    this.flashAndKick(0.05);
+    this.flashAndKick(0.06);
     this.muzzleWorldPosition(this.vFrom);
     this.spawnTracer(this.vFrom, hitPoint);
   }
 
   /** Multi-tracer shot (shotgun pellets) sharing one muzzle flash. */
   fireMany(endpoints: Vec3[]): void {
-    this.flashAndKick(0.09);
+    this.flashAndKick(0.12);
     this.muzzleWorldPosition(this.vFrom);
     for (const end of endpoints) this.spawnTracer(this.vFrom, end);
   }
@@ -187,17 +208,47 @@ export class Weapon {
     this.tracerPool.releaseAll();
   }
 
-  update(dt: number): void {
+  update(dt: number, motion?: ViewMotion): void {
     // Decay muzzle flash.
     const flashMat = this.flash.material as THREE.MeshBasicMaterial;
     if (flashMat.opacity > 0) flashMat.opacity = Math.max(0, flashMat.opacity - dt / 0.04);
     if (this.flashLight.intensity > 0)
       this.flashLight.intensity = Math.max(0, this.flashLight.intensity - (dt / 0.04) * 6);
 
-    // Recoil recovery; apply as a small Z push + pitch on the viewmodel.
+    // Recoil recovery.
     this.recoil = Math.max(0, this.recoil - dt * 0.8);
-    this.group.position.z = -0.45 + this.recoil;
+
+    // Movement bob: a figure-eight that scales with speed.
+    const speed = motion?.speed ?? 0;
+    const run = Math.min(speed / MOVE_SPEED, 1);
+    this.bobPhase += dt * (6 + speed);
+    const bobX = Math.sin(this.bobPhase) * 0.012 * run;
+    const bobY = Math.abs(Math.sin(this.bobPhase * 2)) * 0.014 * run;
+
+    // Look sway: ease toward an offset opposite the turn; returns to rest when
+    // the view is still (target collapses to 0). Cosmetic — aim is unaffected.
+    let targetX = 0;
+    let targetY = 0;
+    if (motion) {
+      if (this.haveAim) {
+        targetX = clamp(-shortestAngle(this.prevYaw, motion.yaw) * 2, -0.05, 0.05);
+        targetY = clamp((motion.pitch - this.prevPitch) * 2, -0.05, 0.05);
+      }
+      this.prevYaw = motion.yaw;
+      this.prevPitch = motion.pitch;
+      this.haveAim = true;
+    }
+    const ks = Math.min(1, dt * 12);
+    this.swayX += (targetX - this.swayX) * ks;
+    this.swayY += (targetY - this.swayY) * ks;
+
+    this.group.position.set(
+      this.baseX + bobX + this.swayX,
+      this.baseY + bobY + this.swayY,
+      this.baseZ + this.recoil,
+    );
     this.group.rotation.x = this.recoil * 1.2;
+    this.group.rotation.y = this.swayX * 1.6;
 
     // Fade active tracers; collect the expired and release them back to the pool
     // (no allocation — `expired` is a reused buffer).
@@ -210,4 +261,12 @@ export class Weapon {
     });
     for (const t of this.expired) this.tracerPool.release(t);
   }
+}
+
+/** Smallest signed angle from a to b, handling the ±π wrap (for sway). */
+function shortestAngle(a: number, b: number): number {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
 }

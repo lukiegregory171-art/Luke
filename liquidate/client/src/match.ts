@@ -38,6 +38,8 @@ import type { Hud } from './hud';
 import type { Net } from './net';
 import type { Opponent } from './opponent';
 import type { Sfx } from './audio';
+import type { Impacts } from './impacts';
+import type { Shake } from './shake';
 
 const STEP = 1 / 60; // fixed input/prediction step
 const INTERP_MS = 100; // render the opponent this far in the past
@@ -101,6 +103,8 @@ export class Match {
     private readonly net: Net,
     private readonly opponent: Opponent,
     private readonly sfx: Sfx,
+    private readonly impacts: Impacts,
+    private readonly shake: Shake,
     private readonly callbacks: MatchCallbacks,
   ) {
     this.selfId = selfId;
@@ -191,7 +195,11 @@ export class Match {
       this.opponent.update(renderTime, dt);
     }
 
-    this.weapon.update(dt);
+    this.weapon.update(dt, {
+      speed: Math.hypot(this.predicted.vel.x, this.predicted.vel.z),
+      yaw: this.input.yaw,
+      pitch: this.input.pitch,
+    });
     this.hud.setLatency(this.net.latency);
   }
 
@@ -241,10 +249,14 @@ export class Match {
       for (let i = 0; i < w.pellets; i++)
         ends.push(this.endpoint(eye, perturbDirection(dir, w.spread), w.range));
       this.weapon.fireMany(ends);
+      for (const e of ends) this.impacts.spawn(e, 'surface');
     } else {
-      this.weapon.fire(this.endpoint(eye, dir, w.range));
+      const end = this.endpoint(eye, dir, w.range);
+      this.weapon.fire(end);
+      this.impacts.spawn(end, 'surface');
     }
     this.sfx.shoot(this.selfWeapon);
+    this.shake.add(w.pellets > 1 ? 0.28 : 0.16);
 
     this.selfAmmo = Math.max(0, this.selfAmmo - 1);
     this.hud.setAmmo(this.selfAmmo, w.magazine);
@@ -311,13 +323,14 @@ export class Match {
     const w = WEAPONS[weapon];
     if (w.pellets > 1) {
       for (let i = 0; i < w.pellets; i++) {
-        this.weapon.spawnWorldTracer(
-          origin,
-          this.endpoint(origin, perturbDirection(dir, w.spread), w.range),
-        );
+        const end = this.endpoint(origin, perturbDirection(dir, w.spread), w.range);
+        this.weapon.spawnWorldTracer(origin, end);
+        this.impacts.spawn(end, 'surface');
       }
     } else {
-      this.weapon.spawnWorldTracer(origin, this.endpoint(origin, dir, w.range));
+      const end = this.endpoint(origin, dir, w.range);
+      this.weapon.spawnWorldTracer(origin, end);
+      this.impacts.spawn(end, 'surface');
     }
     this.sfx.shoot(weapon);
   }
@@ -327,10 +340,13 @@ export class Match {
     if (shooter === this.selfId) {
       this.hud.hit(headshot);
       this.sfx.hit(headshot);
+      // Blood spark at the opponent's torso (cosmetic; the hit is server-decided).
+      this.impacts.spawn({ x: this.oppPos.x, y: this.oppPos.y + 1.1, z: this.oppPos.z }, 'flesh');
     }
     if (target === this.selfId) {
       this.hud.damageFlash();
       this.hud.damageFrom(this.bearingTo(this.oppPos));
+      this.shake.add(headshot ? 0.5 : 0.38);
     }
   }
 

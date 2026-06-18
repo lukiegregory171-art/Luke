@@ -30,6 +30,8 @@ import type { Input } from './input';
 import type { Weapon } from './weapon';
 import type { Hud } from './hud';
 import type { Sfx } from './audio';
+import type { Impacts } from './impacts';
+import type { Shake } from './shake';
 import { Bot } from './bot';
 
 const STEP = 1 / 60;
@@ -62,6 +64,8 @@ export class Practice {
     private readonly gun: Weapon,
     private readonly hud: Hud,
     private readonly sfx: Sfx,
+    private readonly impacts: Impacts,
+    private readonly shake: Shake,
   ) {
     this.player = makeMoveState(map.spawns[0].pos);
     this.input.yaw = map.spawns[0].yaw;
@@ -106,7 +110,11 @@ export class Practice {
     if (!this.bot.alive && this.bot.respawnTimer <= 0) this.bot.respawn(this.map.spawns[1].pos);
 
     this.syncCamera();
-    this.gun.update(dt);
+    this.gun.update(dt, {
+      speed: Math.hypot(this.player.vel.x, this.player.vel.z),
+      yaw: this.input.yaw,
+      pitch: this.input.pitch,
+    });
   }
 
   private stepPlayer(step: number): void {
@@ -152,11 +160,15 @@ export class Practice {
 
     if (w.pellets > 1) this.gun.fireMany(ends);
     else this.gun.fire(ends[0]);
+    for (const e of ends) this.impacts.spawn(e, 'surface');
     this.sfx.shoot(this.weapon);
+    this.shake.add(w.pellets > 1 ? 0.28 : 0.16);
 
     if (damage > 0 && this.bot.alive) {
       this.hud.hit(headshot);
       this.sfx.hit(headshot);
+      const b = this.bot.feet;
+      this.impacts.spawn({ x: b.x, y: b.y + 1.1, z: b.z }, 'flesh');
       if (this.bot.damage(Math.round(damage), RESPAWN)) {
         this.score++;
         this.hud.setScores(this.score, this.botScore);
@@ -186,6 +198,7 @@ export class Practice {
     this.hud.setHealth(Math.max(0, this.health));
     this.hud.damageFlash();
     this.hud.damageFrom(this.bearingTo(this.bot.feet));
+    this.shake.add(hit.headshot ? 0.5 : 0.38);
     if (this.health <= 0 && this.alive) {
       this.alive = false;
       this.respawnTimer = RESPAWN;

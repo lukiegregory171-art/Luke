@@ -26,6 +26,8 @@ import { Hud } from './hud';
 import { Sfx } from './audio';
 import { Net } from './net';
 import { Opponent } from './opponent';
+import { Impacts } from './impacts';
+import { Shake } from './shake';
 import { Match, type MatchResult } from './match';
 import { Practice } from './practice';
 import { Lobby } from './lobby';
@@ -57,6 +59,8 @@ const hud = new Hud();
 const sfx = new Sfx();
 const net = new Net();
 const opponent = new Opponent(world.scene);
+const impacts = new Impacts(world.scene);
+const shake = new Shake();
 const lobby = new Lobby();
 
 // Asset pipeline (P1). The manifest is empty today (procedural art), so this
@@ -134,7 +138,7 @@ resumeHint.addEventListener('click', () => input.requestLock());
 function startMatch(stake: number): void {
   sfx.resume();
   mode = 'match';
-  match = new Match(selfId, DEFAULT_MAP, world, input, gun, hud, net, opponent, sfx, {
+  match = new Match(selfId, DEFAULT_MAP, world, input, gun, hud, net, opponent, sfx, impacts, shake, {
     onSearching: () => {
       setState('searching');
       showCard(cardSearch);
@@ -159,7 +163,7 @@ function startPractice(): void {
   mode = 'practice';
   const map = randomMap();
   world.setMap(map);
-  practice = new Practice(map, world, input, gun, hud, sfx);
+  practice = new Practice(map, world, input, gun, hud, sfx, impacts, shake);
   setState('playing');
   showCard(null);
   hud.show(true);
@@ -191,6 +195,8 @@ function backToLobby(): void {
   mode = null;
   match = null;
   gun.reset(); // retire any lingering tracers (back to the pool)
+  impacts.reset();
+  shake.reset();
   hud.show(false);
   showCard(cardMenu);
 }
@@ -304,6 +310,12 @@ function frame(now: number): void {
   } else {
     gun.update(dt);
   }
+
+  // Combat juice (P3): shake offsets the camera AFTER it's set from input
+  // (authority-safe), then impacts fade. Both run every frame so effects keep
+  // animating/decaying even between modes.
+  shake.update(dt, world.camera);
+  impacts.update(dt, world.camera);
 
   world.render(dt);
   window.__liq!.fps = perf.fps;
