@@ -14,6 +14,23 @@ export default defineConfig({
       '@liquidate/shared': fileURLToPath(new URL('../shared/src/index.ts', import.meta.url)),
     },
   },
+  build: {
+    // P7: split the big engine deps into their own cacheable chunks so they load
+    // in parallel with app code and survive app-only deploys (better repeat
+    // loads). three.js core is inherently large; splitting it out is the win —
+    // total bytes are unchanged, so the size warning limit is raised to fit it.
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/three')) return 'three';
+          if (id.includes('postprocessing') || id.includes('n8ao')) return 'postfx';
+          return 'vendor';
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5173,

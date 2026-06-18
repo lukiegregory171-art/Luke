@@ -21,7 +21,7 @@ import { World } from './world';
 import { AssetManager } from './assets';
 import { MANIFEST } from './manifest';
 import { PerfHud } from './perf';
-import { QUALITY_LEVELS, savedQuality, type QualityLevel } from './quality';
+import { QUALITY_LEVELS, type QualityLevel } from './quality';
 import { SettingsStore } from './settings';
 import { Input } from './input';
 import { Weapon } from './weapon';
@@ -221,7 +221,7 @@ input.onLockChange = (locked) => {
 
 // Graphics quality selector (P0).
 const qualitySel = document.getElementById('quality') as HTMLSelectElement;
-qualitySel.value = savedQuality();
+qualitySel.value = world.qualityLevel; // reflects saved pref or auto-detected default
 qualitySel.addEventListener('change', () => {
   if (QUALITY_LEVELS.includes(qualitySel.value as QualityLevel)) {
     world.applyQuality(qualitySel.value as QualityLevel);

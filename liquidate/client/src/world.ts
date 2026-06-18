@@ -29,7 +29,7 @@ import { N8AOPostPass } from 'n8ao';
 import type { GameMap } from '@liquidate/shared';
 import {
   QUALITY,
-  savedQuality,
+  initialQuality,
   saveQuality,
   type QualityLevel,
   type QualitySettings,
@@ -110,7 +110,7 @@ export class World {
 
     this.scene.add(this.arena);
 
-    this.level = savedQuality();
+    this.level = initialQuality();
     this.quality = QUALITY[this.level];
     this.buildComposer();
     this.applyQuality(this.level);
