@@ -616,6 +616,25 @@ button.ghost:hover {
   color: #6b7a89;
 }
 
+.lobby-graphics {
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #6b7a89;
+}
+.lobby-graphics select {
+  background: #05070a;
+  border: 1px solid #1a2530;
+  color: var(--text);
+  border-radius: 5px;
+  padding: 0.25rem 0.45rem;
+  margin: 0 0.4rem;
+  font-size: 0.78rem;
+}
+.lobby-graphics .hint {
+  color: #4a5662;
+}
+
 .spinner {
   width: 42px;
   height: 42px;

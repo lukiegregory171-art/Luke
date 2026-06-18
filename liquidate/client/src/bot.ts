@@ -73,6 +73,8 @@ export class Bot {
       new THREE.MeshStandardMaterial({ color: 0xff3344, emissive: 0x550000 }),
     );
     visor.position.set(0, HEAD_SPHERE.centerY, -HEAD_SPHERE.radius);
+    body.castShadow = true;
+    head.castShadow = true;
     this.group.add(body, head, visor);
     this.scene.add(this.group);
     this.syncMesh();

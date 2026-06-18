@@ -16,6 +16,8 @@ import {
   type ServerMessage,
 } from '@liquidate/shared';
 import { World } from './world';
+import { PerfHud } from './perf';
+import { QUALITY_LEVELS, savedQuality, type QualityLevel } from './quality';
 import { Input } from './input';
 import { Weapon } from './weapon';
 import { Hud } from './hud';
@@ -30,14 +32,23 @@ import { TOKEN_ENABLED, connectPhantom, fetchTokenBalance } from './token';
 
 declare global {
   interface Window {
-    __liq?: { state: string; balance: number; net: number; locked: boolean; snaps: number };
+    __liq?: {
+      state: string;
+      balance: number;
+      net: number;
+      locked: boolean;
+      snaps: number;
+      fps: number;
+      draws: number;
+    };
   }
 }
 
 const HANDLE_KEY = 'liquidate_handle';
 
 const container = document.getElementById('game') as HTMLElement;
-const world = new World(container);
+const perf = new PerfHud();
+const world = new World(container, perf);
 const input = new Input(world.domElement);
 const gun = new Weapon(world.scene, world.camera);
 const hud = new Hud();
@@ -59,7 +70,7 @@ let selfId = '';
 let match: Match | null = null;
 let practice: Practice | null = null;
 
-window.__liq = { state: appState, balance: 0, net: 0, locked: false, snaps: 0 };
+window.__liq = { state: appState, balance: 0, net: 0, locked: false, snaps: 0, fps: 0, draws: 0 };
 function setState(s: AppState): void {
   appState = s;
   window.__liq!.state = s;
@@ -180,6 +191,15 @@ input.onLockChange = (locked) => {
   resumeHint.classList.toggle('hidden', !(appState === 'playing' && !locked));
 };
 
+// Graphics quality selector (P0).
+const qualitySel = document.getElementById('quality') as HTMLSelectElement;
+qualitySel.value = savedQuality();
+qualitySel.addEventListener('change', () => {
+  if (QUALITY_LEVELS.includes(qualitySel.value as QualityLevel)) {
+    world.applyQuality(qualitySel.value as QualityLevel);
+  }
+});
+
 // --- Cosmetics (M5: skins, optionally devnet-token gated) ------------------
 let tokenBalance = 0;
 let selectedSkin = savedSkin();
@@ -252,7 +272,9 @@ function frame(now: number): void {
     gun.update(dt);
   }
 
-  world.render();
+  world.render(dt);
+  window.__liq!.fps = perf.fps;
+  window.__liq!.draws = perf.drawCalls;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

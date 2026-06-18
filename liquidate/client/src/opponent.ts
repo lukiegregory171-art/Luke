@@ -41,6 +41,8 @@ export class Opponent {
     );
     visor.position.set(0, HEAD_SPHERE.centerY, -HEAD_SPHERE.radius);
 
+    body.castShadow = true;
+    head.castShadow = true;
     this.group.add(body, head, visor);
     this.group.visible = false;
     this.scene.add(this.group);
