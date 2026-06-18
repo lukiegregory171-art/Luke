@@ -2,10 +2,14 @@
  * The remote player, rendered with entity interpolation: snapshots are buffered
  * and the avatar is drawn ~100 ms in the past, lerping between the two snapshots
  * that bracket the render time. This trades a little latency for smooth motion.
+ *
+ * The visible body is an animated {@link Character} (P2); its run cycle is driven
+ * by the interpolated server speed. The character is cosmetic — hits are decided
+ * server-side against `hurtboxes(feet)`, never against this mesh.
  */
 
 import * as THREE from 'three';
-import { BODY_SPHERE, HEAD_SPHERE } from '@liquidate/shared';
+import { Character } from './character';
 
 interface Frame {
   t: number; // server time (ms)
@@ -18,40 +22,17 @@ interface Frame {
 const MAX_FRAMES = 40;
 
 export class Opponent {
-  private readonly group = new THREE.Group();
+  private readonly character: Character;
   private readonly buffer: Frame[] = [];
 
-  constructor(private readonly scene: THREE.Scene) {
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(BODY_SPHERE.radius, BODY_SPHERE.centerY * 1.1, 8, 14),
-      new THREE.MeshStandardMaterial({ color: 0xff8a3d, roughness: 0.5, metalness: 0.1 }),
-    );
-    body.position.y = BODY_SPHERE.centerY;
-
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(HEAD_SPHERE.radius, 18, 14),
-      new THREE.MeshStandardMaterial({ color: 0xffd27f, roughness: 0.4, emissive: 0x331100 }),
-    );
-    head.position.y = HEAD_SPHERE.centerY;
-
-    // A little "visor" so you can read which way they're facing.
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.26, 0.06, 0.04),
-      new THREE.MeshStandardMaterial({ color: 0x16e0a3, emissive: 0x0c5a42 }),
-    );
-    visor.position.set(0, HEAD_SPHERE.centerY, -HEAD_SPHERE.radius);
-
-    body.castShadow = true;
-    head.castShadow = true;
-    this.group.add(body, head, visor);
-    this.group.visible = false;
-    this.scene.add(this.group);
+  constructor(scene: THREE.Scene) {
+    this.character = new Character(scene, { body: 0xff8a3d, head: 0xffd27f, visor: 0x16e0a3 });
   }
 
   /** Clear interpolation state between matches and hide the avatar. */
   reset(): void {
     this.buffer.length = 0;
-    this.group.visible = false;
+    this.character.reset();
   }
 
   pushFrame(serverTime: number, x: number, z: number, yaw: number, alive: boolean): void {
@@ -60,9 +41,10 @@ export class Opponent {
   }
 
   /** Render the opponent at the given (server-time) render moment. */
-  update(renderTime: number): void {
+  update(renderTime: number, dt: number): void {
     if (this.buffer.length === 0) {
-      this.group.visible = false;
+      this.character.setAlive(false);
+      this.character.update(dt, 0);
       return;
     }
 
@@ -84,9 +66,12 @@ export class Opponent {
     const z = older.z + (newer.z - older.z) * f;
     const yaw = older.yaw + shortestAngle(older.yaw, newer.yaw) * f;
 
-    this.group.position.set(x, 0, z);
-    this.group.rotation.y = yaw;
-    this.group.visible = newer.alive;
+    // Interpolated server speed (m/s) drives the walk cadence.
+    const speed = span > 0 ? Math.hypot(newer.x - older.x, newer.z - older.z) / (span / 1000) : 0;
+
+    this.character.place(x, z, yaw);
+    this.character.setAlive(newer.alive);
+    this.character.update(dt, speed);
   }
 }
 

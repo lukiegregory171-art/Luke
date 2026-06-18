@@ -188,7 +188,7 @@ export class Match {
 
     if (this.lastSnapTime > 0) {
       const renderTime = this.lastSnapTime + (performance.now() - this.lastSnapArrival) - INTERP_MS;
-      this.opponent.update(renderTime);
+      this.opponent.update(renderTime, dt);
     }
 
     this.weapon.update(dt);

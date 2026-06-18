@@ -68,6 +68,24 @@ cp node_modules/three/examples/jsm/libs/basis/*   client/public/decoders/basis/
 (meshopt is bundled as an ES module and needs no copied files.) The decoder path
 is configurable via the `AssetManager` constructor if you prefer a CDN.
 
+## Characters & animation (P2)
+
+Players are drawn by `client/src/character.ts` — a **procedural** articulated
+humanoid (torso/head/visor/arms/legs) animated from movement (run cycle scaled
+by speed, idle breathing, death topple). One `Character` serves both the
+networked opponent and the practice bot.
+
+It is **cosmetic-only**: animation moves only child limbs, never the root, so it
+can't move a player or shift a hitbox (hurtboxes are `hurtboxes(feet)` in
+`shared/`). `tests/character.test.ts` locks that invariant in.
+
+**Drop-in slot for a real rigged character:** register a skinned `.glb` with
+named clips in the manifest (e.g. idle/run/death), load it via the
+`AssetManager`, and drive a `THREE.AnimationMixer` from the same speed/alive
+signals `Character.update()` already consumes. The procedural rig stays the
+zero-asset fallback. Quaternius has CC0 rigged characters; Mixamo provides free
+animations (check its license terms before shipping).
+
 ## Attribution
 
 Every external asset added MUST be logged in `ATTRIBUTION.md` with source,

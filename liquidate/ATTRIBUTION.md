@@ -12,6 +12,9 @@ looks are procedural / engine-generated:
   (no HDRI file). `scene.environment` is the drop-in slot for a real HDRI later
   (e.g. a CC0 Poly Haven `.hdr`).
 - Materials, the neon grid, and obstacle edges are shader/material-based.
+- **Player characters** (P2) are a procedural articulated rig built from
+  primitives and animated in code (`client/src/character.ts`) — no model files.
+  The drop-in slot for a rigged `.glb` is documented in `docs/assets.md`.
 - Audio is synthesized at runtime via the Web Audio API (no sample files).
 
 As of P1 the asset *pipeline* exists (manifest-driven glTF + Draco/meshopt +

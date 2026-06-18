@@ -8,9 +8,7 @@
 
 import * as THREE from 'three';
 import {
-  BODY_SPHERE,
   EYE_HEIGHT,
-  HEAD_SPHERE,
   MAX_HEALTH,
   RIFLE,
   aimAngles,
@@ -23,6 +21,7 @@ import {
   type MoveState,
   type Vec3,
 } from '@liquidate/shared';
+import { Character } from './character';
 
 const TURN_RATE = 5.5; // rad/s aim slew
 const DESIRED_RANGE = 11; // metres the bot tries to hold
@@ -45,39 +44,18 @@ export class Bot {
   /** Disables AI movement/firing (used for a calm target and by tests). */
   passive = false;
 
-  private readonly group = new THREE.Group();
+  private readonly character: Character;
   private ammo = RIFLE.magazine;
   private fireCd = 0;
   private reloadTimer = 0;
   private strafe = 1;
   private repath = 0;
 
-  constructor(
-    private readonly scene: THREE.Scene,
-    spawn: Vec3,
-  ) {
+  constructor(scene: THREE.Scene, spawn: Vec3) {
     this.move = makeMoveState(spawn);
-
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(BODY_SPHERE.radius, BODY_SPHERE.centerY * 1.1, 8, 14),
-      new THREE.MeshStandardMaterial({ color: 0xff8a3d, roughness: 0.5 }),
-    );
-    body.position.y = BODY_SPHERE.centerY;
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(HEAD_SPHERE.radius, 16, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffd27f, roughness: 0.4, emissive: 0x331100 }),
-    );
-    head.position.y = HEAD_SPHERE.centerY;
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.26, 0.06, 0.04),
-      new THREE.MeshStandardMaterial({ color: 0xff3344, emissive: 0x550000 }),
-    );
-    visor.position.set(0, HEAD_SPHERE.centerY, -HEAD_SPHERE.radius);
-    body.castShadow = true;
-    head.castShadow = true;
-    this.group.add(body, head, visor);
-    this.scene.add(this.group);
-    this.syncMesh();
+    // Red-visor team tint to distinguish the bot from a networked opponent.
+    this.character = new Character(scene, { body: 0xff8a3d, head: 0xffd27f, visor: 0xff3344 });
+    this.renderAvatar(0); // place + show upright at spawn
   }
 
   get feet(): Vec3 {
@@ -109,7 +87,7 @@ export class Bot {
       this.health = 0;
       this.alive = false;
       this.respawnTimer = respawnDelay;
-      this.group.visible = false;
+      this.character.setAlive(false); // play the death topple
       return true;
     }
     return false;
@@ -122,14 +100,15 @@ export class Bot {
     this.fireCd = 0;
     this.reloadTimer = 0;
     this.alive = true;
-    this.group.visible = true;
-    this.syncMesh();
+    this.character.setAlive(true);
+    this.renderAvatar(0);
   }
 
   /** Decide what to do this step and advance the bot's own movement. */
   think(dt: number, playerEye: Vec3, map: GameMap): BotDecision {
     if (!this.alive) {
       this.respawnTimer -= dt;
+      this.renderAvatar(dt); // advance the death topple
       return { moveFwd: 0, moveRight: 0, fire: false };
     }
 
@@ -143,7 +122,7 @@ export class Bot {
     this.pitch += clamp(want.pitch - this.pitch, -TURN_RATE * dt, TURN_RATE * dt);
 
     if (this.passive) {
-      this.syncMesh();
+      this.renderAvatar(dt);
       return { moveFwd: 0, moveRight: 0, fire: false };
     }
 
@@ -172,7 +151,7 @@ export class Bot {
     const moveRight = this.strafe;
 
     this.move = stepMovement(this.move, { moveFwd, moveRight, yaw: this.yaw }, dt, map);
-    this.syncMesh();
+    this.renderAvatar(dt);
 
     // Fire when aimed, in range, with line of sight.
     const aimErr = Math.abs(angleDiff(this.yaw, want.yaw)) + Math.abs(this.pitch - want.pitch);
@@ -192,9 +171,11 @@ export class Bot {
     return { moveFwd, moveRight, fire };
   }
 
-  private syncMesh(): void {
-    this.group.position.set(this.move.pos.x, 0, this.move.pos.z);
-    this.group.rotation.y = this.yaw;
+  /** Place + animate the cosmetic character from the bot's authoritative state. */
+  private renderAvatar(dt: number): void {
+    const speed = Math.hypot(this.move.vel.x, this.move.vel.z);
+    this.character.place(this.move.pos.x, this.move.pos.z, this.yaw);
+    this.character.update(dt, speed);
   }
 }
 
