@@ -112,12 +112,48 @@ export const REFINERY: GameMap = {
   ],
 };
 
+const VAULT_W = 32;
+const VAULT_D = 42;
+
+/**
+ * "Vault" — a long hall with a central pillar, mirrored diagonal crates, flank
+ * walls, and cover just ahead of each spawn. Symmetric across both axes so
+ * neither end has an edge; spawns face down the long (Z) axis.
+ */
+export const VAULT: GameMap = {
+  id: 'vault',
+  name: 'Vault',
+  width: VAULT_W,
+  depth: VAULT_D,
+  wallHeight: WALL_HEIGHT,
+  obstacles: [
+    // Central pillar (breaks the spawn-to-spawn line).
+    box(0, 0, 4, 4, 2.8),
+    // Mirrored diagonal crates around the centre.
+    box(-9, -9, 3, 3, 1.4),
+    box(9, 9, 3, 3, 1.4),
+    box(9, -9, 3, 3, 1.4),
+    box(-9, 9, 3, 3, 1.4),
+    // Flank walls down each side.
+    box(-12, 0, 1.5, 7, 2.2),
+    box(12, 0, 1.5, 7, 2.2),
+    // Cover ahead of each spawn.
+    box(0, -13, 5, 1.5, 1.4),
+    box(0, 13, 5, 1.5, 1.4),
+  ],
+  spawns: [
+    { pos: { x: 0, y: 0, z: -VAULT_D / 2 + 3 }, yaw: Math.PI }, // -Z end, facing +Z
+    { pos: { x: 0, y: 0, z: VAULT_D / 2 - 3 }, yaw: 0 }, // +Z end, facing -Z
+  ],
+};
+
 export const MAPS: Record<string, GameMap> = {
   [CROSSFIRE.id]: CROSSFIRE,
   [REFINERY.id]: REFINERY,
+  [VAULT.id]: VAULT,
 };
 
-export const MAP_LIST: GameMap[] = [CROSSFIRE, REFINERY];
+export const MAP_LIST: GameMap[] = [CROSSFIRE, REFINERY, VAULT];
 
 export const DEFAULT_MAP = CROSSFIRE;
 

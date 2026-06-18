@@ -34,6 +34,7 @@ import {
   type QualityLevel,
   type QualitySettings,
 } from './quality';
+import { buildDressing, envTheme, type EnvTheme } from './env';
 import type { PerfHud } from './perf';
 
 const ACCENT = 0x16e0a3;
@@ -125,15 +126,25 @@ export class World {
     return this.level;
   }
 
-  /** Build (or rebuild) the arena geometry for the given map. */
+  /** Build (or rebuild) the arena geometry + environment dressing for a map. */
   setMap(map: GameMap): void {
     this.arena.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
     });
     this.arena.clear();
-    this.scene.fog = new THREE.Fog(0x0c1420, 20, Math.max(map.width, map.depth) * 1.7);
-    this.buildArena(map);
+
+    const theme = envTheme(map);
+    const far = Math.max(theme.fogFar, Math.max(map.width, map.depth) * 1.7);
+    this.scene.fog = new THREE.Fog(theme.fog, theme.fogNear, far);
+    this.scene.background = new THREE.Color(theme.fog);
+
+    this.buildArena(map, theme); // resets accentMats with the neon grid + edges
+    const { group, accentMats } = buildDressing(map, theme);
+    this.arena.add(group);
+    this.accentMats.push(...accentMats);
+    this.setAccent(this.accent); // retint all neon (grid/edges/trim/pylons) to the active skin
+
     this.fitShadowCamera(map);
   }
 
@@ -151,10 +162,10 @@ export class World {
     this.key.target.position.set(0, 0, 0);
   }
 
-  private buildArena(map: GameMap): void {
+  private buildArena(map: GameMap, theme: EnvTheme): void {
     // Polished dark-metal floor (reflects the environment + neon).
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x1b2735,
+      color: theme.floor,
       metalness: 0.35,
       roughness: 0.5,
       envMapIntensity: 1.2,
@@ -183,7 +194,7 @@ export class World {
     const h = map.wallHeight;
     const t = 0.4;
     const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x232f3b,
+      color: theme.wall,
       metalness: 0.2,
       roughness: 0.7,
     });
@@ -203,7 +214,7 @@ export class World {
 
     // Cover obstacles: PBR box + bright neon edge that blooms.
     const obsMat = new THREE.MeshStandardMaterial({
-      color: 0x2b3b49,
+      color: theme.obstacle,
       metalness: 0.3,
       roughness: 0.5,
       envMapIntensity: 1.1,
@@ -259,7 +270,11 @@ export class World {
   setAccent(hex: number): void {
     this.accent = hex;
     this.rim.color.setHex(hex);
-    for (const m of this.accentMats) (m as THREE.LineBasicMaterial).color.setHex(hex);
+    for (const m of this.accentMats) {
+      const mm = m as THREE.MeshStandardMaterial & THREE.LineBasicMaterial;
+      mm.color?.setHex(hex);
+      mm.emissive?.setHex(hex); // present on the trim/pylon MeshStandardMaterials
+    }
   }
 
   // --- Post-processing + quality --------------------------------------------

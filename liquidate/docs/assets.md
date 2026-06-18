@@ -86,6 +86,30 @@ signals `Character.update()` already consumes. The procedural rig stays the
 zero-asset fallback. Quaternius has CC0 rigged characters; Mixamo provides free
 animations (check its license terms before shipping).
 
+## Maps & environment (P5)
+
+Maps are **data** (`shared/src/map.ts` → `MAPS`/`MAP_LIST`): extents, wall
+height, `obstacles` (the collide-able cover), and two spawns. Add a map by
+adding an entry — the server picks from `MAP_LIST` automatically (or `MAP=<id>`
+forces one). The server uses ONLY `obstacles`/`spawns`; geometry is the client's.
+
+Environment art lives client-side in `client/src/env.ts`:
+
+- `ENV_THEMES` gives each map a mood (fog + base floor/wall/obstacle colours),
+  keyed by map id with a `DEFAULT_ENV` fallback.
+- `buildDressing()` adds decoration — upper wall band, emissive accent trim, a
+  ceiling with light strips, corner pylons, floor markings.
+
+**"What you see is what you collide with" is preserved:** none of the dressing
+is a collider. Every tall decorative element sits at the perimeter or above the
+wall line; interior decor is flat floor markings — so nothing looks like cover
+you can't actually use. `tests/env.test.ts` enforces this (no waist-height decor
+in the interior). The accent pieces are returned so the skin system retints them.
+
+**Drop-in slot:** swap the procedural floor/wall materials for `.ktx2`-textured
+PBR materials, or add prop `.glb`s per theme via the `AssetManager`. The
+procedural look is the zero-asset default.
+
 ## Skins (P4)
 
 Skins are **data** (`shared/src/cosmetics.ts` → `SKINS`): id, name, CSS `color`,
