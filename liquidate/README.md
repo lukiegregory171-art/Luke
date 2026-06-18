@@ -230,6 +230,25 @@ npm run build    # bundle server -> server/dist, build client -> client/dist
 The repo builds to a single Node server that serves the client and the
 WebSocket game on one port, with SQLite for the play-money economy.
 
+### One-click (Render) — get a public URL, no terminal
+
+A Render Blueprint (`render.yaml` at the repo root) is included. Click:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/lukiegregory171-art/Luke/tree/claude/zealous-cannon-4jsywq)
+
+Sign in to Render (free), approve the blueprint, and it builds from the
+`Dockerfile` and gives you a public `https://…onrender.com` URL — open it, sign
+in with a handle, and play (FIND MATCH from two tabs, or PRACTICE). WebSockets
+work over the same URL. On Render's **free** tier the filesystem is ephemeral,
+so the demo accounts reset on restart and the instance sleeps when idle (first
+hit after sleeping takes a few seconds to wake); for persistence, use a paid
+instance with a disk at `/data` and set `LIQUIDATE_DB=/data/liquidate.sqlite`.
+
+Railway and Fly.io also work — both detect the `Dockerfile` (set the root/build
+context to `liquidate/`).
+
+### Docker
+
 ```bash
 # From liquidate/ — build the image and run it
 docker build -t liquidate .
