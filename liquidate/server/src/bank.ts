@@ -15,6 +15,8 @@
 
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import {
   DEPOSIT_FEE_BPS,
   STARTING_BALANCE,
@@ -45,6 +47,9 @@ export class Bank {
   private readonly db: Database.Database;
 
   constructor(path = ':memory:') {
+    // Ensure the DB's directory exists (better-sqlite3 won't create it), so a
+    // fresh run with the default `data/…` path doesn't crash on first boot.
+    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new Database(path);
     this.db.pragma('journal_mode = WAL');
     this.migrate();
