@@ -28,7 +28,7 @@ import { Weapon } from './weapon';
 import { Hud } from './hud';
 import { Sfx } from './audio';
 import { Net } from './net';
-import { Opponent } from './opponent';
+import { Opponents } from './opponents';
 import { Impacts } from './impacts';
 import { Shake } from './shake';
 import { Match, type MatchResult } from './match';
@@ -61,7 +61,7 @@ const gun = new Weapon(world.scene, world.camera);
 const hud = new Hud();
 const sfx = new Sfx();
 const net = new Net();
-const opponent = new Opponent(world.scene);
+const opponents = new Opponents(world.scene);
 const impacts = new Impacts(world.scene);
 const shake = new Shake();
 const lobby = new Lobby();
@@ -137,17 +137,18 @@ lobby.onLogin = (handle) => {
 };
 lobby.onDeposit = (amount) => net.send({ type: 'deposit', amount });
 lobby.onWithdraw = (amount) => net.send({ type: 'withdraw', amount });
-lobby.onQueue = (stake) => startMatch(stake);
+lobby.onQueue = (stake) => startMatch(stake, 'duel');
+lobby.onFfa = () => startMatch(0, 'ffa');
 lobby.onPractice = startPractice;
 
 document.getElementById('cancel')!.addEventListener('click', () => location.reload());
 document.getElementById('play-again')!.addEventListener('click', backToLobby);
 resumeHint.addEventListener('click', () => input.requestLock());
 
-function startMatch(stake: number): void {
+function startMatch(stake: number, queueMode: 'duel' | 'ffa'): void {
   sfx.resume();
   mode = 'match';
-  match = new Match(selfId, DEFAULT_MAP, world, input, gun, hud, net, opponent, sfx, impacts, shake, {
+  match = new Match(selfId, DEFAULT_MAP, world, input, gun, hud, net, opponents, sfx, impacts, shake, {
     onSearching: () => {
       setState('searching');
       showCard(cardSearch);
@@ -162,7 +163,7 @@ function startMatch(stake: number): void {
     onOver: showOver,
     onSnapshot: () => window.__liq!.snaps++,
   });
-  net.send({ type: 'queue', stake });
+  net.send({ type: 'queue', stake, mode: queueMode });
   setState('searching');
   showCard(cardSearch);
   input.requestLock();

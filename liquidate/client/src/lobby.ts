@@ -29,6 +29,7 @@ export class Lobby {
 
   onLogin: (handle: string) => void = () => {};
   onQueue: (stake: number) => void = () => {};
+  onFfa: () => void = () => {};
   onDeposit: (amount: number) => void = () => {};
   onWithdraw: (amount: number) => void = () => {};
   onPractice: () => void = () => {};
@@ -47,6 +48,7 @@ export class Lobby {
     deposit: document.getElementById('lobby-deposit') as HTMLButtonElement,
     withdraw: document.getElementById('lobby-withdraw') as HTMLButtonElement,
     find: document.getElementById('lobby-find') as HTMLButtonElement,
+    ffa: document.getElementById('lobby-ffa') as HTMLButtonElement,
     practice: document.getElementById('lobby-practice') as HTMLButtonElement,
   };
 
@@ -62,6 +64,9 @@ export class Lobby {
     this.el.withdraw.addEventListener('click', () => this.onWithdraw(BANK_AMOUNT));
     this.el.find.addEventListener('click', () => {
       if (this.account) this.onQueue(this.stake);
+    });
+    this.el.ffa.addEventListener('click', () => {
+      if (this.account) this.onFfa();
     });
     this.el.practice.addEventListener('click', () => this.onPractice());
 
@@ -105,6 +110,7 @@ export class Lobby {
     this.el.signin.classList.toggle('hidden', loggedIn);
     this.el.account.classList.toggle('hidden', !loggedIn);
     this.el.find.disabled = !loggedIn;
+    this.el.ffa.disabled = !loggedIn;
 
     if (this.account) {
       this.el.who.textContent = this.account.handle;

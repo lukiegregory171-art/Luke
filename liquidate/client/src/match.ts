@@ -25,6 +25,7 @@ import {
   stepMovement,
   type GameMap,
   type InputMessage,
+  type MatchMode,
   type MoveState,
   type ServerMessage,
   type StartMessage,
@@ -36,7 +37,7 @@ import type { Input } from './input';
 import type { Weapon } from './weapon';
 import type { Hud } from './hud';
 import type { Net } from './net';
-import type { Opponent } from './opponent';
+import type { Opponents } from './opponents';
 import type { Sfx } from './audio';
 import type { Impacts } from './impacts';
 import type { Shake } from './shake';
@@ -66,8 +67,8 @@ const SLOT: Record<WeaponId, number> = { assault: 1, smg: 2, sniper: 3 };
 
 export class Match {
   private selfId = '';
-  private oppId = '';
-  private spawnIndex: 0 | 1 = 0;
+  private mode: MatchMode = 'duel';
+  private spawnIndex = 0;
 
   private predicted: MoveState = makeMoveState({ x: 0, y: 0, z: 0 });
   private pending: InputMessage[] = [];
@@ -81,8 +82,7 @@ export class Match {
   private prevHealth = MAX_HEALTH;
 
   private selfScore = 0;
-  private oppScore = 0;
-  private oppPos: Vec3 = { x: 0, y: 0, z: 0 };
+  private oppScore = 0; // leader among the other players (for the scoreboard/result)
   private lastHeadshot = false;
 
   private lastSnapTime = 0;
@@ -101,7 +101,7 @@ export class Match {
     private readonly weapon: Weapon,
     private readonly hud: Hud,
     private readonly net: Net,
-    private readonly opponent: Opponent,
+    private readonly opponents: Opponents,
     private readonly sfx: Sfx,
     private readonly impacts: Impacts,
     private readonly shake: Shake,
@@ -128,7 +128,7 @@ export class Match {
         this.onSnap(msg);
         break;
       case 'fire':
-        if (msg.id === this.oppId) this.renderOpponentShot(msg.weapon, msg.origin, msg.dir);
+        if (msg.id !== this.selfId) this.renderOpponentShot(msg.weapon, msg.origin, msg.dir);
         break;
       case 'hit':
         this.onHit(msg.shooter, msg.target, msg.headshot);
@@ -152,8 +152,8 @@ export class Match {
 
   private begin(start: StartMessage): void {
     this.map = start.map;
+    this.mode = start.mode;
     this.world.setMap(this.map);
-    this.oppId = start.opponentId;
     this.spawnIndex = start.selfSpawnIndex;
     const spawn = this.map.spawns[this.spawnIndex];
     this.predicted = makeMoveState(spawn.pos);
@@ -161,12 +161,14 @@ export class Match {
     this.input.pitch = 0;
     this.pending = [];
     this.selfWeapon = DEFAULT_WEAPON;
-    this.opponent.reset();
+    this.selfScore = 0;
+    this.oppScore = 0;
+    this.opponents.reset();
     this.over = false;
     this.oppLeft = false;
     this.playing = true;
     this.syncCamera();
-    this.hud.setScores(0, 0);
+    this.updateScoreboard();
     this.hud.setHealth(MAX_HEALTH);
     const w0 = WEAPONS[DEFAULT_WEAPON];
     this.hud.setAmmo(w0.magazine, w0.magazine);
@@ -193,7 +195,7 @@ export class Match {
 
     if (this.lastSnapTime > 0) {
       const renderTime = this.lastSnapTime + (performance.now() - this.lastSnapArrival) - INTERP_MS;
-      this.opponent.update(renderTime, dt);
+      this.opponents.update(renderTime, dt);
     }
 
     const selfSpeed = Math.hypot(this.predicted.vel.x, this.predicted.vel.z);
@@ -269,7 +271,6 @@ export class Match {
 
   private onSnap(msg: Extract<ServerMessage, { type: 'snap' }>): void {
     const self = msg.players.find((p) => p.id === this.selfId);
-    const opp = msg.players.find((p) => p.id === this.oppId);
 
     if (self) {
       this.selfAlive = self.alive;
@@ -307,16 +308,28 @@ export class Match {
       this.prevHealth = self.health;
     }
 
-    if (opp) {
-      this.oppScore = opp.score;
-      this.oppPos = { x: opp.x, y: opp.y, z: opp.z };
-      this.opponent.pushFrame(msg.serverTime, opp.x, opp.z, opp.yaw, opp.alive);
+    // Every other player is a remote opponent: buffer it for interpolation, and
+    // track the leading score among them.
+    const present = new Set<string>();
+    let leader = 0;
+    for (const p of msg.players) {
+      if (p.id === this.selfId) continue;
+      present.add(p.id);
+      this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.z, p.yaw, p.alive);
+      if (p.score > leader) leader = p.score;
     }
+    this.opponents.retainOnly(present);
+    this.oppScore = leader;
 
     this.lastSnapTime = msg.serverTime;
     this.lastSnapArrival = performance.now();
-    this.hud.setScores(this.selfScore, this.oppScore);
+    this.updateScoreboard();
     this.callbacks.onSnapshot?.();
+  }
+
+  private updateScoreboard(): void {
+    if (this.mode === 'ffa') this.hud.setFrags(this.selfScore, this.oppScore);
+    else this.hud.setScores(this.selfScore, this.oppScore);
   }
 
   private renderOpponentShot(weapon: WeaponId, origin: Vec3, dir: Vec3): void {
@@ -341,14 +354,16 @@ export class Match {
       this.hud.hit(headshot);
       this.sfx.hit(headshot);
       // Floating damage number (computed from weapon data; the hit itself is
-      // server-decided). Blood spark at the opponent's torso.
+      // server-decided). Blood spark at the hit player's torso.
       const w = WEAPONS[this.selfWeapon];
       this.hud.damageNumber(Math.round(w.damage * (headshot ? w.headshotMultiplier : 1)), headshot);
-      this.impacts.spawn({ x: this.oppPos.x, y: this.oppPos.y + 1.1, z: this.oppPos.z }, 'flesh');
+      const p = this.opponents.positionOf(target);
+      if (p) this.impacts.spawn({ x: p.x, y: 1.1, z: p.z }, 'flesh');
     }
     if (target === this.selfId) {
       this.hud.damageFlash();
-      this.hud.damageFrom(this.bearingTo(this.oppPos));
+      const from = this.opponents.positionOf(shooter);
+      if (from) this.hud.damageFrom(this.bearingTo({ x: from.x, y: 0, z: from.z }));
       this.shake.add(headshot ? 0.5 : 0.38);
     }
   }
@@ -360,7 +375,7 @@ export class Match {
       this.hud.banner('YOU DIED', 'bad');
       this.sfx.death();
     } else if (killer === this.selfId) {
-      this.hud.banner('OPPONENT DOWN', 'good');
+      this.hud.banner(this.mode === 'ffa' ? 'FRAG' : 'OPPONENT DOWN', 'good');
       this.sfx.kill();
     }
   }

@@ -1,56 +1,89 @@
 /**
- * Matchmaking + economy + reconnection glue. Logged-in sessions queue with a
- * demo stake and are paired into 1v1 Rooms. The effective stake (min of both) is
- * escrowed at start and settled (winner credited pot - rake, rake to treasury)
- * at the end. On disconnect the match pauses for a grace period and the same
- * account can reconnect to resume; otherwise it forfeits. The server is the sole
- * balance authority.
+ * Matchmaking + economy + reconnection glue.
+ *
+ * - DUEL (1v1): logged-in sessions queue with a demo stake and are paired. The
+ *   effective stake (min of both) is escrowed at start and settled at the end
+ *   (winner credited pot - rake, rake to treasury). On disconnect the match
+ *   pauses for a grace period to allow reconnect; otherwise it forfeits.
+ * - FFA: sessions queue into a free (no-stake) N-player room; remaining slots are
+ *   filled with bots so it starts promptly and is never empty. A leaver is simply
+ *   removed (no pause); the match ends when no humans remain.
+ * - Empty duel lobbies are filled with a single bot after a short wait.
+ *
+ * The server is the sole balance authority. Bot matches (and FFA) are free, so
+ * there's no economy and no stat-farming; ranked/paid play stays humans-only.
  */
 
-import type { ClientMessage, GameMap } from '@liquidate/shared';
+import { FFA_SIZE, type ClientMessage, type GameMap, type MatchMode } from '@liquidate/shared';
 import { randomUUID } from 'node:crypto';
 import type { Connection } from './connection';
 import type { Bank } from './bank';
-import { Room, type RoomOptions } from './room';
+import { Room } from './room';
 import { makeBotConnection } from './botconnection';
 import { ServerBot } from './serverbot';
 import { sendAccount, sendTreasury, makeSession, type Session } from './session';
 import { log } from './logger';
 
+interface MatchmakerOptions {
+  targetKills: number; // duel
+  ffaTargetKills: number;
+  respawnDelay: number;
+}
+
 interface RoomCtx {
   room: Room;
-  slots: [Session, Session];
+  slots: Session[];
+  mode: MatchMode;
   stake: number;
+  bots: ServerBot[];
   graceTimer?: ReturnType<typeof setTimeout>;
-  bot?: ServerBot;
+}
+
+interface BotBinding {
+  bot: ServerBot;
+  conn: Connection;
 }
 
 export class Matchmaker {
-  private readonly queue: Session[] = [];
+  private readonly duelQueue: Session[] = [];
+  private readonly ffaQueue: Session[] = [];
   private readonly roomByConn = new Map<string, RoomCtx>();
-  private readonly pausedByAccount = new Map<string, { ctx: RoomCtx; slot: 0 | 1 }>();
+  private readonly pausedByAccount = new Map<string, { ctx: RoomCtx; slot: number }>();
   private readonly botFillTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private ffaFillTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly bank: Bank,
     private readonly pickMap: () => GameMap,
-    private readonly opts: RoomOptions,
+    private readonly opts: MatchmakerOptions,
     private readonly graceMs: number,
     private readonly botFillMs: number,
   ) {}
 
-  /** Enqueue a logged-in session with a validated stake. */
-  enqueue(session: Session, rawStake: number): void {
+  /** Enqueue a logged-in session (duel by default, or free-for-all). */
+  enqueue(session: Session, rawStake: number, mode: MatchMode = 'duel'): void {
     const acct = session.accountId ? this.bank.get(session.accountId) : undefined;
     if (!acct) return;
-    if (this.roomByConn.has(session.conn.id) || this.queue.includes(session)) return;
+    if (this.roomByConn.has(session.conn.id)) return;
+    if (this.duelQueue.includes(session) || this.ffaQueue.includes(session)) return;
+
+    if (mode === 'ffa') {
+      session.stake = 0; // FFA is free
+      session.conn.send({ type: 'waiting' });
+      this.ffaQueue.push(session);
+      if (this.ffaQueue.length >= FFA_SIZE) this.startFfaFromQueue();
+      else if (!this.ffaFillTimer) {
+        this.ffaFillTimer = setTimeout(() => this.startFfaFromQueue(), this.botFillMs);
+      }
+      return;
+    }
+
     session.stake = Math.max(0, Math.min(Math.floor(rawStake) || 0, acct.balance));
     session.conn.send({ type: 'waiting' });
-    this.queue.push(session);
+    this.duelQueue.push(session);
     this.tryMatch();
-    // Still waiting? Fill the lobby with a bot after a short delay so it's never
-    // empty. (A human arriving first will match and clear this timer.)
-    if (this.queue.includes(session)) {
+    // Still waiting? Fill with a bot after a short delay (never empty).
+    if (this.duelQueue.includes(session)) {
       this.clearBotTimer(session.conn.id);
       this.botFillTimers.set(
         session.conn.id,
@@ -59,36 +92,12 @@ export class Matchmaker {
     }
   }
 
-  private clearBotTimer(connId: string): void {
-    const t = this.botFillTimers.get(connId);
-    if (t) {
-      clearTimeout(t);
-      this.botFillTimers.delete(connId);
-    }
-  }
-
-  /** Pair a still-waiting human with a server bot in a free (no-stake) match. */
-  private botFill(session: Session): void {
-    this.clearBotTimer(session.conn.id);
-    const i = this.queue.indexOf(session);
-    if (i < 0) return;
-    this.queue.splice(i, 1);
-    if (!session.conn.isOpen()) return;
-
-    const botId = 'bot-' + randomUUID();
-    const bot = new ServerBot(botId);
-    const botConn = makeBotConnection(botId, (msg) => bot.onMessage(msg));
-    const botSession = makeSession(botConn);
-    log.info('bot_fill', { human: session.accountId, bot: botId });
-    this.startMatch(session, botSession, bot);
-  }
-
   /** Route an in-match message to the connection's room (if any). */
   route(conn: Connection, msg: ClientMessage): void {
     this.roomByConn.get(conn.id)?.room.handleMessage(conn, msg);
   }
 
-  /** If this (just-logged-in) session matches a paused match, resume it. */
+  /** If this (just-logged-in) session matches a paused duel, resume it. */
   tryReconnect(session: Session): boolean {
     if (!session.accountId) return false;
     const paused = this.pausedByAccount.get(session.accountId);
@@ -103,17 +112,31 @@ export class Matchmaker {
     return true;
   }
 
-  /** A connection dropped: leave the queue, or pause the match (grace) / forfeit. */
+  /** A connection dropped: leave the queue, or pause/forfeit (duel) / leave (ffa). */
   remove(session: Session): void {
     this.clearBotTimer(session.conn.id);
-    const qi = this.queue.indexOf(session);
-    if (qi >= 0) this.queue.splice(qi, 1);
+    const dq = this.duelQueue.indexOf(session);
+    if (dq >= 0) this.duelQueue.splice(dq, 1);
+    const fq = this.ffaQueue.indexOf(session);
+    if (fq >= 0) this.ffaQueue.splice(fq, 1);
 
     const ctx = this.roomByConn.get(session.conn.id);
     if (!ctx) return;
-    const slot = ctx.slots[0] === session ? 0 : 1;
+    const slot = ctx.slots.findIndex((s) => s === session);
     this.roomByConn.delete(session.conn.id);
 
+    if (ctx.mode === 'ffa') {
+      if (slot >= 0) ctx.room.leave(slot);
+      // No humans left? End the match (bots don't play to an empty room).
+      const humansLeft = ctx.slots.some((s) => s.accountId && s.conn.isOpen());
+      if (!humansLeft) {
+        for (const b of ctx.bots) b.stop();
+        ctx.room.endNoContest();
+      }
+      return;
+    }
+
+    // Duel.
     if (!session.accountId) {
       ctx.room.forfeit(slot);
       return;
@@ -127,93 +150,163 @@ export class Matchmaker {
     }, this.graceMs);
   }
 
-  private tryMatch(): void {
-    while (this.queue.length >= 2) {
-      const a = this.queue.shift()!;
-      const b = this.queue.shift()!;
-      this.clearBotTimer(a.conn.id);
-      this.clearBotTimer(b.conn.id);
-      if (!a.conn.isOpen()) {
-        if (b.conn.isOpen()) this.queue.unshift(b);
-        continue;
-      }
-      if (!b.conn.isOpen()) {
-        if (a.conn.isOpen()) this.queue.unshift(a);
-        continue;
-      }
-      this.startMatch(a, b);
+  private clearBotTimer(connId: string): void {
+    const t = this.botFillTimers.get(connId);
+    if (t) {
+      clearTimeout(t);
+      this.botFillTimers.delete(connId);
     }
   }
 
-  private startMatch(a: Session, b: Session, bot?: ServerBot): void {
-    const stake = Math.min(a.stake, b.stake);
-    const slots: [Session, Session] = [a, b];
+  private tryMatch(): void {
+    while (this.duelQueue.length >= 2) {
+      const a = this.duelQueue.shift()!;
+      const b = this.duelQueue.shift()!;
+      this.clearBotTimer(a.conn.id);
+      this.clearBotTimer(b.conn.id);
+      if (!a.conn.isOpen()) {
+        if (b.conn.isOpen()) this.duelQueue.unshift(b);
+        continue;
+      }
+      if (!b.conn.isOpen()) {
+        if (a.conn.isOpen()) this.duelQueue.unshift(a);
+        continue;
+      }
+      this.startDuel(a, b);
+    }
+  }
 
+  /** Pair a still-waiting human with a bot in a free duel. */
+  private botFill(session: Session): void {
+    this.clearBotTimer(session.conn.id);
+    const i = this.duelQueue.indexOf(session);
+    if (i < 0) return;
+    this.duelQueue.splice(i, 1);
+    if (!session.conn.isOpen()) return;
+
+    const { session: botSession, binding } = this.makeBot();
+    session.stake = 0; // bot matches are free
+    this.createRoom([session, botSession], 'duel', 0, [binding]);
+    log.info('bot_fill', { human: session.accountId });
+  }
+
+  /** Start an FFA room from the waiting queue, filling spare slots with bots. */
+  private startFfaFromQueue(): void {
+    if (this.ffaFillTimer) {
+      clearTimeout(this.ffaFillTimer);
+      this.ffaFillTimer = undefined;
+    }
+    const humans: Session[] = [];
+    while (this.ffaQueue.length && humans.length < FFA_SIZE) {
+      const s = this.ffaQueue.shift()!;
+      if (s.conn.isOpen() && !this.roomByConn.has(s.conn.id)) humans.push(s);
+    }
+    if (humans.length === 0) return;
+
+    const sessions: Session[] = [...humans];
+    const bindings: BotBinding[] = [];
+    for (let i = humans.length; i < FFA_SIZE; i++) {
+      const { session, binding } = this.makeBot();
+      sessions.push(session);
+      bindings.push(binding);
+    }
+    this.createRoom(sessions, 'ffa', 0, bindings);
+    log.info('ffa_start', { humans: humans.length, bots: bindings.length });
+
+    // More humans still queued? Start forming the next room.
+    if (this.ffaQueue.length > 0 && !this.ffaFillTimer) {
+      this.ffaFillTimer = setTimeout(() => this.startFfaFromQueue(), this.botFillMs);
+    }
+  }
+
+  private makeBot(): { session: Session; binding: BotBinding } {
+    const id = 'bot-' + randomUUID();
+    const bot = new ServerBot(id);
+    const conn = makeBotConnection(id, (msg) => bot.onMessage(msg));
+    return { session: makeSession(conn), binding: { bot, conn } };
+  }
+
+  private startDuel(a: Session, b: Session): void {
+    const stake = Math.min(a.stake, b.stake);
     if (stake > 0 && a.accountId && b.accountId) {
       this.bank.escrow(a.accountId, stake);
       this.bank.escrow(b.accountId, stake);
       sendAccount(a.conn, this.bank, a.accountId);
       sendAccount(b.conn, this.bank, b.accountId);
     }
+    this.createRoom([a, b], 'duel', stake, []);
+    log.info('match_start', { a: a.accountId, b: b.accountId, stake });
+  }
 
-    const latencyOf = (connId: string): number => slots.find((s) => s.conn.id === connId)?.rtt ?? 0;
+  private createRoom(
+    sessions: Session[],
+    mode: MatchMode,
+    stake: number,
+    bots: BotBinding[],
+  ): void {
+    const latencyOf = (connId: string): number =>
+      sessions.find((s) => s.conn.id === connId)?.rtt ?? 0;
 
     // The onResult closure needs the ctx, which needs the room — break the cycle
     // with a stable holder (also keeps working across reconnects).
     const ref: { ctx?: RoomCtx } = {};
     const room = new Room(
-      a.conn,
-      b.conn,
+      sessions.map((s) => s.conn),
       this.pickMap(),
-      this.opts,
+      {
+        targetKills: mode === 'ffa' ? this.opts.ffaTargetKills : this.opts.targetKills,
+        respawnDelay: this.opts.respawnDelay,
+        mode,
+      },
       stake,
       latencyOf,
       (winner, scores) => {
         if (ref.ctx) this.settle(ref.ctx, winner, scores);
       },
     );
-    const ctx: RoomCtx = { room, slots, stake, bot };
+    const ctx: RoomCtx = { room, slots: sessions, mode, stake, bots: bots.map((b) => b.bot) };
     ref.ctx = ctx;
-    this.roomByConn.set(a.conn.id, ctx);
-    this.roomByConn.set(b.conn.id, ctx);
-    // A bot drives the second slot by routing its inputs straight into the room
-    // (the Room validates them like any client). Must be wired before start().
-    if (bot) bot.attach((msg) => room.handleMessage(b.conn, msg));
-    log.info('match_start', { a: a.accountId, b: b.accountId, stake, bot: !!bot });
+    for (const s of sessions) this.roomByConn.set(s.conn.id, ctx);
+    // Bots drive their slot by routing inputs straight into the room (validated
+    // like any client). Must be wired before start().
+    for (const b of bots) b.bot.attach((msg) => room.handleMessage(b.conn, msg));
     room.start();
   }
 
   private settle(ctx: RoomCtx, winnerConnId: string | null, scores: Record<string, number>): void {
     if (ctx.graceTimer) clearTimeout(ctx.graceTimer);
-    ctx.bot?.stop();
-    const [a, b] = ctx.slots;
-    this.roomByConn.delete(a.conn.id);
-    this.roomByConn.delete(b.conn.id);
-    if (a.accountId) this.pausedByAccount.delete(a.accountId);
-    if (b.accountId) this.pausedByAccount.delete(b.accountId);
+    for (const b of ctx.bots) b.stop();
+    for (const s of ctx.slots) {
+      this.roomByConn.delete(s.conn.id);
+      if (s.accountId) this.pausedByAccount.delete(s.accountId);
+    }
 
-    if (a.accountId && b.accountId) {
-      if (winnerConnId === null) {
-        if (ctx.stake > 0) {
-          this.bank.refund(a.accountId, ctx.stake);
-          this.bank.refund(b.accountId, ctx.stake);
-        }
-      } else {
-        const winner = winnerConnId === a.conn.id ? a : b;
-        const loser = winner === a ? b : a;
-        this.bank.settle(
-          winner.accountId!,
-          loser.accountId!,
-          ctx.stake,
-          scores[winner.conn.id] ?? 0,
-          scores[loser.conn.id] ?? 0,
-        );
+    // Economy + stats only for 1v1 duels between two real accounts. FFA and bot
+    // matches are free — no balance change, no stat farming.
+    if (ctx.mode !== 'duel') return;
+    const [a, b] = ctx.slots;
+    if (!a?.accountId || !b?.accountId) return;
+
+    if (winnerConnId === null) {
+      if (ctx.stake > 0) {
+        this.bank.refund(a.accountId, ctx.stake);
+        this.bank.refund(b.accountId, ctx.stake);
       }
-      for (const s of [a, b]) {
-        if (s.conn.isOpen() && s.accountId) {
-          sendAccount(s.conn, this.bank, s.accountId);
-          sendTreasury(s.conn, this.bank);
-        }
+    } else {
+      const winner = winnerConnId === a.conn.id ? a : b;
+      const loser = winner === a ? b : a;
+      this.bank.settle(
+        winner.accountId!,
+        loser.accountId!,
+        ctx.stake,
+        scores[winner.conn.id] ?? 0,
+        scores[loser.conn.id] ?? 0,
+      );
+    }
+    for (const s of [a, b]) {
+      if (s.conn.isOpen() && s.accountId) {
+        sendAccount(s.conn, this.bank, s.accountId);
+        sendTreasury(s.conn, this.bank);
       }
     }
   }

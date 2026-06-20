@@ -37,6 +37,17 @@ export class Opponent {
     this.character.reset();
   }
 
+  /** Free GPU resources + remove from the scene (when this player leaves). */
+  dispose(): void {
+    this.character.dispose();
+  }
+
+  /** Latest known feet position (for impacts / damage indicators). */
+  position(): { x: number; z: number } | undefined {
+    const f = this.buffer[this.buffer.length - 1];
+    return f ? { x: f.x, z: f.z } : undefined;
+  }
+
   pushFrame(serverTime: number, x: number, z: number, yaw: number, alive: boolean): void {
     this.buffer.push({ t: serverTime, x, z, yaw, alive });
     if (this.buffer.length > MAX_FRAMES) this.buffer.shift();

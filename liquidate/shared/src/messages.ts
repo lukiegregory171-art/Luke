@@ -12,7 +12,7 @@
  */
 
 import type { GameMap } from './map';
-import type { WeaponId } from './config';
+import type { MatchMode, WeaponId } from './config';
 
 export type PlayerId = string;
 
@@ -56,6 +56,7 @@ export interface LoginMessage {
 export interface QueueMessage {
   type: 'queue';
   stake: number;
+  mode?: MatchMode; // defaults to 'duel' (1v1); 'ffa' is free-for-all
 }
 
 export interface DepositMessage {
@@ -103,10 +104,12 @@ export interface WaitingMessage {
 
 export interface StartMessage {
   type: 'start';
-  opponentId: PlayerId;
-  selfSpawnIndex: 0 | 1;
+  mode: MatchMode;
+  opponentId: PlayerId; // 1v1: the other player; FFA: '' (use `players`)
+  players: PlayerId[]; // all player ids in the match (self + others)
+  selfSpawnIndex: number;
   map: GameMap; // the map this match is played on (may differ from init's default)
-  stake: number; // each player's demo stake; pot = 2 * stake
+  stake: number; // each player's demo stake; pot = 2 * stake (FFA is free: 0)
 }
 
 /** Authoritative demo account state (sent after login and any balance change). */

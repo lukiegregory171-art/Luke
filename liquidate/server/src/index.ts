@@ -16,6 +16,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   BOT_FILL_MS,
   DEFAULT_MAP,
+  FFA_TARGET_KILLS,
   MAPS,
   RECONNECT_GRACE_MS,
   RESPAWN_DELAY,
@@ -40,6 +41,7 @@ const PORT = Number(process.env.PORT ?? SERVER_PORT);
 // Match rules, overridable via env (used to keep the integration test fast and
 // deterministic).
 const targetKills = Number(process.env.TARGET_KILLS) || TARGET_KILLS;
+const ffaTargetKills = Number(process.env.FFA_TARGET_KILLS) || FFA_TARGET_KILLS;
 const respawnDelay = Number(process.env.RESPAWN_DELAY) || RESPAWN_DELAY;
 const graceMs = Number(process.env.RECONNECT_GRACE_MS) || RECONNECT_GRACE_MS;
 const botFillMs = Number(process.env.BOT_FILL_MS) || BOT_FILL_MS;
@@ -106,7 +108,13 @@ const httpServer = createServer(serveStatic);
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
 const bank = new Bank(process.env.LIQUIDATE_DB ?? 'data/liquidate.sqlite');
-const matchmaker = new Matchmaker(bank, pickMap, { targetKills, respawnDelay }, graceMs, botFillMs);
+const matchmaker = new Matchmaker(
+  bank,
+  pickMap,
+  { targetKills, ffaTargetKills, respawnDelay },
+  graceMs,
+  botFillMs,
+);
 
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
@@ -164,7 +172,7 @@ wss.on('connection', (socket: WebSocket) => {
         }
         return;
       case 'queue':
-        matchmaker.enqueue(session, msg.stake);
+        matchmaker.enqueue(session, msg.stake, msg.mode ?? 'duel');
         return;
       default:
         matchmaker.route(conn, msg);

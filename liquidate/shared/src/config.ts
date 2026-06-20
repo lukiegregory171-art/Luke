@@ -46,8 +46,11 @@ export const BODY_SPHERE = { centerY: 1.0, radius: 0.45 };
 export const HEAD_SPHERE = { centerY: 1.65, radius: 0.22 };
 
 // --- Match rules -----------------------------------------------------------
-export const TARGET_KILLS = 3; // first to this many kills wins
+export type MatchMode = 'duel' | 'ffa';
+export const TARGET_KILLS = 3; // 1v1: first to this many kills wins
 export const RESPAWN_DELAY = 2.0; // seconds before respawn
+export const FFA_SIZE = 6; // players in a free-for-all room (humans + bots)
+export const FFA_TARGET_KILLS = 8; // FFA: first to this many frags wins
 
 // --- Economy (PLAY-MONEY / DEMO ONLY — never real funds or custody) ---------
 // All amounts are integer "DEMO" credits held server-side in SQLite. This is a

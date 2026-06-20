@@ -1,20 +1,20 @@
 /**
- * An authoritative 1v1 match. The room owns the truth: it integrates each
- * player's inputs with the SHARED movement code, resolves fires with the SHARED
- * occluded hitscan, tracks health/ammo/score, and broadcasts snapshots at the
- * fixed tick rate. Clients are never trusted for position, hits, or outcome.
+ * An authoritative match for N players (1v1 duel = 2, FFA = up to 6). The room
+ * owns the truth: it integrates each player's inputs with the SHARED movement
+ * code, resolves fires with the SHARED occluded hitscan against ALL other
+ * players (nearest hit wins, so players occlude each other), tracks
+ * health/ammo/score, and broadcasts snapshots at the fixed tick rate. Clients
+ * are never trusted for position, hits, or outcome.
  *
- * M6 hardening:
- *  - Lag compensation ("favor the shooter"): per-player position history is kept
- *    and a shot is resolved against where the target was at the shooter's view
- *    time (now - rtt/2 - interpolation), clamped to MAX_REWIND_MS.
- *  - Anti-cheat sanity checks: per-tick simulated-movement budget (bounds input
- *    flooding), view-angle clamping/validation, and the existing server-side
- *    fire-rate/ammo/reload + dt clamp. These reject impossible *inputs*. They do
- *    NOT and cannot detect aimbots — a bot that aims perfectly sends legal
- *    inputs. See `cheatFlags`.
- *  - Reconnection: a dropped player pauses the match for a grace period
- *    (orchestrated by the matchmaker) and can rebind to resume.
+ *  - Lag compensation ("favor the shooter"): per-player position history; a shot
+ *    is resolved against where each target was at the shooter's view time
+ *    (now - rtt/2 - interpolation), clamped to MAX_REWIND_MS.
+ *  - Anti-cheat: per-tick simulated-movement budget, view-angle clamp/validate,
+ *    server-side fire-rate/ammo/reload + dt clamp. Rejects impossible *inputs*;
+ *    cannot detect aimbots.
+ *  - Duel reconnection: a dropped player pauses the match for a grace period
+ *    (orchestrated by the matchmaker) and can rebind. FFA does not pause — a
+ *    leaver is simply removed and the match continues.
  */
 
 import {
@@ -43,9 +43,11 @@ import {
   type GameMap,
   type HistorySample,
   type InputMessage,
+  type MatchMode,
   type MoveState,
   type OverMessage,
   type PlayerSnapshot,
+  type ServerMessage,
   type Vec3,
   type WeaponId,
 } from '@liquidate/shared';
@@ -55,13 +57,14 @@ import { log } from './logger';
 export interface RoomOptions {
   targetKills: number;
   respawnDelay: number;
+  mode: MatchMode;
 }
 
 const HISTORY_MS = 1000;
 
 interface PlayerSim {
   conn: Connection;
-  spawnIndex: 0 | 1;
+  spawnIndex: number;
   connected: boolean;
   move: MoveState;
   yaw: number;
@@ -78,7 +81,7 @@ interface PlayerSim {
   lastProcessedSeq: number;
   queue: ClientMessage[];
   history: HistorySample[];
-  cheatFlags: number; // count of rejected/clamped impossible inputs
+  cheatFlags: number;
 }
 
 function fullAmmo(): Record<WeaponId, number> {
@@ -86,15 +89,14 @@ function fullAmmo(): Record<WeaponId, number> {
 }
 
 export class Room {
-  private readonly p0: PlayerSim;
-  private readonly p1: PlayerSim;
+  private readonly players: PlayerSim[];
+  private readonly mode: MatchMode;
   private interval?: ReturnType<typeof setInterval>;
   private tickCount = 0;
   private over = false;
 
   constructor(
-    a: Connection,
-    b: Connection,
+    conns: Connection[],
     private readonly map: GameMap,
     private readonly opts: RoomOptions,
     private readonly stake: number,
@@ -104,12 +106,12 @@ export class Room {
       scores: Record<string, number>,
     ) => void,
   ) {
-    this.p0 = this.makePlayer(a, 0);
-    this.p1 = this.makePlayer(b, 1);
+    this.mode = opts.mode;
+    this.players = conns.map((c, i) => this.makePlayer(c, i));
   }
 
-  private makePlayer(conn: Connection, spawnIndex: 0 | 1): PlayerSim {
-    const spawn = this.map.spawns[spawnIndex];
+  private makePlayer(conn: Connection, spawnIndex: number): PlayerSim {
+    const spawn = this.map.spawns[spawnIndex % this.map.spawns.length];
     return {
       conn,
       spawnIndex,
@@ -134,15 +136,17 @@ export class Room {
   }
 
   start(): void {
-    this.sendStart(this.p0);
-    this.sendStart(this.p1);
+    for (const p of this.players) this.sendStart(p);
     this.resume();
   }
 
   private sendStart(p: PlayerSim): void {
+    const others = this.players.filter((o) => o !== p);
     p.conn.send({
       type: 'start',
-      opponentId: this.opponentOf(p).conn.id,
+      mode: this.mode,
+      opponentId: this.mode === 'duel' && others[0] ? others[0].conn.id : '',
+      players: this.players.map((o) => o.conn.id),
       selfSpawnIndex: p.spawnIndex,
       map: this.map,
       stake: this.stake,
@@ -164,25 +168,31 @@ export class Room {
     }
   }
 
-  // --- Reconnection (orchestrated by the matchmaker) ------------------------
+  // --- Reconnection / leaving (orchestrated by the matchmaker) --------------
 
-  slotOf(connId: string): 0 | 1 | null {
-    if (connId === this.p0.conn.id) return 0;
-    if (connId === this.p1.conn.id) return 1;
-    return null;
+  slotOf(connId: string): number | null {
+    const i = this.players.findIndex((p) => p.conn.id === connId);
+    return i >= 0 ? i : null;
   }
 
-  /** Pause the match because a player dropped (awaiting reconnect or forfeit). */
-  markDisconnected(slot: 0 | 1): void {
-    (slot === 0 ? this.p0 : this.p1).connected = false;
+  /** Count of still-connected players (used by the matchmaker for FFA). */
+  connectedCount(): number {
+    return this.players.filter((p) => p.connected).length;
+  }
+
+  /** Duel: pause because a player dropped (awaiting reconnect or forfeit). */
+  markDisconnected(slot: number): void {
+    const p = this.players[slot];
+    if (p) p.connected = false;
     this.pause();
     log.info('match_paused', { reason: 'disconnect', slot });
   }
 
-  /** Rebind a reconnecting player to a fresh connection and resume. */
-  rebind(slot: 0 | 1, conn: Connection): void {
+  /** Duel: rebind a reconnecting player to a fresh connection and resume. */
+  rebind(slot: number, conn: Connection): void {
     if (this.over) return;
-    const p = slot === 0 ? this.p0 : this.p1;
+    const p = this.players[slot];
+    if (!p) return;
     p.conn = conn;
     p.connected = true;
     p.queue.length = 0;
@@ -191,11 +201,15 @@ export class Room {
     log.info('match_resumed', { slot });
   }
 
-  /** Forfeit: the given slot loses; the opponent wins. */
-  forfeit(slot: 0 | 1): void {
+  /** Duel forfeit: the given slot loses; the (single) opponent wins. */
+  forfeit(slot: number): void {
     if (this.over) return;
-    const loser = slot === 0 ? this.p0 : this.p1;
-    const winner = this.opponentOf(loser);
+    const loser = this.players[slot];
+    const winner = this.players.find((p) => p !== loser);
+    if (!winner) {
+      this.endNoContest();
+      return;
+    }
     this.over = true;
     if (winner.conn.isOpen()) {
       winner.conn.send({ type: 'oppLeft' });
@@ -203,6 +217,24 @@ export class Room {
     }
     log.info('match_forfeit', { winner: winner.conn.id, loser: loser.conn.id });
     this.cleanup(winner.conn.id);
+  }
+
+  /** FFA: a player left for good — remove them; the match continues for others. */
+  leave(slot: number): void {
+    if (this.over) return;
+    const p = this.players[slot];
+    if (!p) return;
+    p.connected = false;
+    p.alive = false;
+    p.queue.length = 0;
+    log.info('ffa_leave', { slot });
+  }
+
+  /** End with no winner (e.g. everyone left an FFA match). */
+  endNoContest(): void {
+    if (this.over) return;
+    this.over = true;
+    this.cleanup(null);
   }
 
   private pause(): void {
@@ -222,7 +254,7 @@ export class Room {
   private tick(): void {
     if (this.over) return;
     const now = Date.now();
-    for (const p of [this.p0, this.p1]) {
+    for (const p of this.players) {
       this.advanceTimers(p, TICK_DT);
       this.drain(p);
       if (this.over) return; // a fire may have ended the match
@@ -233,7 +265,7 @@ export class Room {
   }
 
   private recordHistory(now: number): void {
-    for (const p of [this.p0, this.p1]) {
+    for (const p of this.players) {
       p.history.push({ t: now, x: p.move.pos.x, z: p.move.pos.z });
       while (p.history.length > 1 && p.history[0].t < now - HISTORY_MS) p.history.shift();
     }
@@ -248,25 +280,28 @@ export class Room {
         p.ammo[p.weapon] = WEAPONS[p.weapon].magazine;
       }
     }
-    if (!p.alive) {
+    if (!p.alive && p.connected) {
       p.respawnTimer -= dt;
       if (p.respawnTimer <= 0) this.respawn(p);
     }
   }
 
   private drain(p: PlayerSim): void {
-    // Anti-cheat: bound the total simulated movement time applied per tick so a
-    // client cannot move faster by flooding inputs.
+    if (!p.connected) {
+      p.queue.length = 0;
+      return;
+    }
+    // Anti-cheat: bound total simulated movement time applied per tick.
     let budget = MAX_TICK_DT;
     for (const msg of p.queue) {
       if (msg.type === 'input') {
         const want = clampDt(msg.dt);
         const allowed = Math.min(want, budget);
         this.applyInput(p, msg, allowed);
-        if (allowed < want) p.cheatFlags++; // input-flood / oversized dt
+        if (allowed < want) p.cheatFlags++;
         budget = Math.max(0, budget - allowed);
       } else if (msg.type === 'fire') {
-        this.fire(p, this.opponentOf(p));
+        this.fire(p);
       } else if (msg.type === 'reload') {
         this.startReload(p);
       } else if (msg.type === 'switch') {
@@ -281,7 +316,6 @@ export class Room {
   }
 
   private applyInput(p: PlayerSim, msg: InputMessage, dt: number): void {
-    // View-angle validation (server-authoritative): finite yaw, clamped pitch.
     if (Number.isFinite(msg.yaw)) p.yaw = msg.yaw;
     if (Number.isFinite(msg.pitch)) {
       const clamped = clamp(msg.pitch, -PITCH_LIMIT, PITCH_LIMIT);
@@ -307,7 +341,8 @@ export class Room {
     p.fireCooldown = Math.max(p.fireCooldown, WEAPON_SWITCH_TIME);
   }
 
-  private fire(shooter: PlayerSim, target: PlayerSim): void {
+  /** Resolve a shot from `shooter` against ALL other players (nearest hit). */
+  private fire(shooter: PlayerSim): void {
     if (this.over || !shooter.alive || shooter.reloading || shooter.fireCooldown > 0) return;
     const w = WEAPONS[shooter.weapon];
     if (shooter.ammo[shooter.weapon] <= 0) {
@@ -326,44 +361,49 @@ export class Room {
     const dir = aimDirection(shooter.yaw, shooter.pitch);
     this.broadcast({ type: 'fire', id: shooter.conn.id, weapon: shooter.weapon, origin: eye, dir });
 
-    if (target.alive) {
-      // Lag compensation: resolve against where the target was on the shooter's
-      // screen (now - rtt/2 - interpolation), clamped.
-      const lag = clamp(this.latencyOf(shooter.conn.id) / 2 + INTERP_MS, 0, MAX_REWIND_MS);
-      const past = sampleHistory(target.history, Date.now() - lag);
-      const feet: Vec3 = past ? { x: past.x, y: 0, z: past.z } : target.move.pos;
-      const box = hurtboxes(feet);
+    // Lag-comp box per target (where it was on the shooter's screen).
+    const lag = clamp(this.latencyOf(shooter.conn.id) / 2 + INTERP_MS, 0, MAX_REWIND_MS);
+    const viewTime = Date.now() - lag;
+    const targets = this.players.filter((t) => t !== shooter && t.alive && t.connected);
 
-      let damage = 0;
-      let headshot = false;
-      for (let i = 0; i < w.pellets; i++) {
-        const rayDir = perturbDirection(dir, w.spread);
-        const hit = hitscan(eye, rayDir, w.range, box, this.map.obstacles);
-        if (hit) {
-          damage += w.damage * (hit.headshot ? w.headshotMultiplier : 1);
-          if (hit.headshot) headshot = true;
-        }
+    const tally = new Map<PlayerSim, { dmg: number; head: boolean }>();
+    for (let i = 0; i < w.pellets; i++) {
+      const rayDir = perturbDirection(dir, w.spread);
+      let best: { target: PlayerSim; t: number; head: boolean } | null = null;
+      for (const target of targets) {
+        const past = sampleHistory(target.history, viewTime);
+        const feet: Vec3 = past ? { x: past.x, y: 0, z: past.z } : target.move.pos;
+        const hit = hitscan(eye, rayDir, w.range, hurtboxes(feet), this.map.obstacles);
+        if (hit && (!best || hit.t < best.t)) best = { target, t: hit.t, head: hit.headshot };
       }
-      if (damage > 0) {
-        damage = Math.round(damage);
-        target.health -= damage;
-        this.broadcast({
-          type: 'hit',
-          shooter: shooter.conn.id,
-          target: target.conn.id,
-          headshot,
-          damage,
-        });
-        if (target.health <= 0) {
-          target.health = 0;
-          target.alive = false;
-          target.respawnTimer = this.opts.respawnDelay;
-          shooter.score++;
-          this.broadcast({ type: 'kill', killer: shooter.conn.id, victim: target.conn.id });
-          if (shooter.score >= this.opts.targetKills) {
-            this.endMatch(shooter.conn.id);
-            return;
-          }
+      if (best) {
+        const d = w.damage * (best.head ? w.headshotMultiplier : 1);
+        const cur = tally.get(best.target) ?? { dmg: 0, head: false };
+        cur.dmg += d;
+        cur.head = cur.head || best.head;
+        tally.set(best.target, cur);
+      }
+    }
+
+    for (const [target, { dmg, head }] of tally) {
+      const damage = Math.round(dmg);
+      target.health -= damage;
+      this.broadcast({
+        type: 'hit',
+        shooter: shooter.conn.id,
+        target: target.conn.id,
+        headshot: head,
+        damage,
+      });
+      if (target.health <= 0) {
+        target.health = 0;
+        target.alive = false;
+        target.respawnTimer = this.opts.respawnDelay;
+        shooter.score++;
+        this.broadcast({ type: 'kill', killer: shooter.conn.id, victim: target.conn.id });
+        if (shooter.score >= this.opts.targetKills) {
+          this.endMatch(shooter.conn.id);
+          return;
         }
       }
     }
@@ -379,7 +419,7 @@ export class Room {
   }
 
   private respawn(p: PlayerSim): void {
-    const spawn = this.map.spawns[p.spawnIndex];
+    const spawn = this.pickRespawn(p);
     p.move = makeMoveState(spawn.pos);
     p.yaw = spawn.yaw;
     p.pitch = 0;
@@ -399,6 +439,26 @@ export class Room {
       z: p.move.pos.z,
       yaw: p.yaw,
     });
+  }
+
+  /** Duel: own spawn. FFA: the spawn farthest from other live players. */
+  private pickRespawn(p: PlayerSim): { pos: Vec3; yaw: number } {
+    if (this.mode === 'duel') return this.map.spawns[p.spawnIndex % this.map.spawns.length];
+    const enemies = this.players.filter((o) => o !== p && o.alive && o.connected);
+    let best = this.map.spawns[p.spawnIndex % this.map.spawns.length];
+    let bestDist = -1;
+    for (const s of this.map.spawns) {
+      let minD = Infinity;
+      for (const e of enemies) {
+        const d = Math.hypot(s.pos.x - e.move.pos.x, s.pos.z - e.move.pos.z);
+        if (d < minD) minD = d;
+      }
+      if (minD > bestDist) {
+        bestDist = minD;
+        best = s;
+      }
+    }
+    return best;
   }
 
   private endMatch(winnerId: string): void {
@@ -427,11 +487,9 @@ export class Room {
   }
 
   private broadcastSnapshot(now: number): void {
-    const players: PlayerSnapshot[] = [this.snapshotOf(this.p0), this.snapshotOf(this.p1)];
-    const ack: Record<string, number> = {
-      [this.p0.conn.id]: this.p0.lastProcessedSeq,
-      [this.p1.conn.id]: this.p1.lastProcessedSeq,
-    };
+    const players: PlayerSnapshot[] = this.players.map((p) => this.snapshotOf(p));
+    const ack: Record<string, number> = {};
+    for (const p of this.players) ack[p.conn.id] = p.lastProcessedSeq;
     this.broadcast({ type: 'snap', tick: this.tickCount, serverTime: now, ack, players });
   }
 
@@ -456,21 +514,16 @@ export class Room {
   }
 
   private scores(): Record<string, number> {
-    return { [this.p0.conn.id]: this.p0.score, [this.p1.conn.id]: this.p1.score };
+    const s: Record<string, number> = {};
+    for (const p of this.players) s[p.conn.id] = p.score;
+    return s;
   }
 
-  private broadcast(msg: Parameters<Connection['send']>[0]): void {
-    if (this.p0.connected) this.p0.conn.send(msg);
-    if (this.p1.connected) this.p1.conn.send(msg);
+  private broadcast(msg: ServerMessage): void {
+    for (const p of this.players) if (p.connected) p.conn.send(msg);
   }
 
   private playerFor(conn: Connection): PlayerSim | undefined {
-    if (conn.id === this.p0.conn.id) return this.p0;
-    if (conn.id === this.p1.conn.id) return this.p1;
-    return undefined;
-  }
-
-  private opponentOf(p: PlayerSim): PlayerSim {
-    return p === this.p0 ? this.p1 : this.p0;
+    return this.players.find((p) => p.conn.id === conn.id);
   }
 }

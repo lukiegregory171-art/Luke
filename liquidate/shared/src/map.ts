@@ -29,7 +29,8 @@ export interface GameMap {
   depth: number; // Z extent
   wallHeight: number;
   obstacles: AABB[];
-  spawns: [SpawnPoint, SpawnPoint];
+  /** At least 2: [0] and [1] are the 1v1 ends; extras are used for FFA. */
+  spawns: SpawnPoint[];
 }
 
 function box(cx: number, cz: number, sizeX: number, sizeZ: number, height: number, y = 0): AABB {
@@ -37,6 +38,11 @@ function box(cx: number, cz: number, sizeX: number, sizeZ: number, height: numbe
     min: { x: cx - sizeX / 2, y, z: cz - sizeZ / 2 },
     max: { x: cx + sizeX / 2, y: y + height, z: cz + sizeZ / 2 },
   };
+}
+
+/** A spawn at (x,z) facing the arena centre (origin). */
+function facing(x: number, z: number): SpawnPoint {
+  return { pos: { x, y: 0, z }, yaw: Math.atan2(x, z) };
 }
 
 const WIDTH = 30;
@@ -70,10 +76,14 @@ export const CROSSFIRE: GameMap = {
     box(11, 4, 1.5, 6, 2.2),
   ],
   spawns: [
-    // -Z end, facing +Z into the arena (yaw = PI looks toward +Z).
+    // [0]/[1] are the 1v1 ends. -Z end faces +Z (yaw PI); +Z end faces -Z.
     { pos: { x: 0, y: 0, z: -DEPTH / 2 + 3 }, yaw: Math.PI },
-    // +Z end, facing -Z into the arena (yaw = 0 looks toward -Z).
     { pos: { x: 0, y: 0, z: DEPTH / 2 - 3 }, yaw: 0 },
+    // Extra FFA spawns (corners), each facing the centre.
+    facing(-11, -13),
+    facing(11, -13),
+    facing(-11, 13),
+    facing(11, 13),
   ],
 };
 
@@ -109,6 +119,10 @@ export const REFINERY: GameMap = {
   spawns: [
     { pos: { x: -REFINERY_W / 2 + 3, y: 0, z: 0 }, yaw: -Math.PI / 2 }, // -X end, facing +X
     { pos: { x: REFINERY_W / 2 - 3, y: 0, z: 0 }, yaw: Math.PI / 2 }, // +X end, facing -X
+    facing(-13, -13),
+    facing(13, -13),
+    facing(-13, 13),
+    facing(13, 13),
   ],
 };
 
@@ -144,6 +158,10 @@ export const VAULT: GameMap = {
   spawns: [
     { pos: { x: 0, y: 0, z: -VAULT_D / 2 + 3 }, yaw: Math.PI }, // -Z end, facing +Z
     { pos: { x: 0, y: 0, z: VAULT_D / 2 - 3 }, yaw: 0 }, // +Z end, facing -Z
+    facing(-11, -14),
+    facing(11, -14),
+    facing(-11, 14),
+    facing(11, 14),
   ],
 };
 

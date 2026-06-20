@@ -53,6 +53,11 @@ export class Hud {
     this.score.innerHTML = `<b>${self}</b>&nbsp;&nbsp;YOU&nbsp;·&nbsp;OPP&nbsp;&nbsp;<b>${opp}</b>`;
   }
 
+  /** FFA: your frags vs the current leader. */
+  setFrags(self: number, leader: number): void {
+    this.score.innerHTML = `FRAGS&nbsp;<b>${self}</b>&nbsp;·&nbsp;LEAD&nbsp;<b>${leader}</b>`;
+  }
+
   setHealth(hp: number): void {
     const frac = Math.max(0, Math.min(1, hp / MAX_HEALTH));
     this.healthFill.style.width = `${frac * 100}%`;

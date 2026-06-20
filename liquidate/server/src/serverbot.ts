@@ -23,6 +23,7 @@ import {
   nearestObstacle,
   type ClientMessage,
   type GameMap,
+  type PlayerSnapshot,
   type ServerMessage,
   type Vec3,
 } from '@liquidate/shared';
@@ -34,7 +35,6 @@ const FIRE_AIM_TOLERANCE = 0.12; // how "on target" before it shoots
 
 export class ServerBot {
   private map?: GameMap;
-  private oppId?: string;
   private yaw = 0;
   private pitch = 0;
   private seq = 0;
@@ -68,7 +68,6 @@ export class ServerBot {
     if (this.stopped) return;
     if (msg.type === 'start') {
       this.map = msg.map;
-      this.oppId = msg.opponentId;
       const spawn = msg.map.spawns[msg.selfSpawnIndex];
       this.yaw = spawn.yaw;
       this.pitch = 0;
@@ -78,13 +77,24 @@ export class ServerBot {
   }
 
   private onSnap(snap: Extract<ServerMessage, { type: 'snap' }>): void {
-    if (this.stopped || !this.map || !this.route || !this.oppId) return;
+    if (this.stopped || !this.map || !this.route) return;
     const self = snap.players.find((p) => p.id === this.selfId);
-    const opp = snap.players.find((p) => p.id === this.oppId);
     if (!self) return;
 
+    // Target the nearest live opponent (works for duel and FFA alike).
+    let opp: PlayerSnapshot | undefined;
+    let bestDist = Infinity;
+    for (const p of snap.players) {
+      if (p.id === this.selfId || !p.alive) continue;
+      const d = Math.hypot(p.x - self.x, p.z - self.z);
+      if (d < bestDist) {
+        bestDist = d;
+        opp = p;
+      }
+    }
+
     // Dead, or no live target: hold still (the server respawns us).
-    if (!self.alive || !opp || !opp.alive) {
+    if (!self.alive || !opp) {
       this.sendInput(0, 0);
       return;
     }

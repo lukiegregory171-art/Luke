@@ -9,7 +9,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
-import { decode, type PlayerSnapshot, type ServerMessage, type StartMessage } from '@liquidate/shared';
+import {
+  decode,
+  type OverMessage,
+  type PlayerSnapshot,
+  type ServerMessage,
+  type StartMessage,
+} from '@liquidate/shared';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const TSX = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url));
@@ -70,7 +76,8 @@ beforeAll(async () => {
       ...process.env,
       PORT: String(PORT),
       BOT_FILL_MS: '300', // fill fast for the test
-      TARGET_KILLS: '10', // don't let the match end during observation
+      TARGET_KILLS: '10', // duel: don't let the match end during observation
+      FFA_TARGET_KILLS: '2', // ffa: end quickly once bots frag each other
       RESPAWN_DELAY: '0.3',
       MAP: 'crossfire',
       LIQUIDATE_DB: ':memory:',
@@ -119,6 +126,31 @@ describe('bots fill empty lobbies (M3)', () => {
     );
     expect(moved).toBe(true);
     expect(botSnaps[botSnaps.length - 1].alive).toBe(true);
+
+    c.close();
+  });
+
+  it('fills a free-for-all with bots and plays to a winner', async () => {
+    const c = new Client();
+    await c.open();
+    await c.waitUntil(() => c.id !== '');
+    c.send({ type: 'login', handle: `ffa_${Date.now()}` });
+    await c.waitUntil(() => c.of('account').length > 0);
+    c.send({ type: 'queue', stake: 0, mode: 'ffa' });
+
+    await c.waitUntil(() => c.of('start').length > 0);
+    const start = c.of('start')[0] as StartMessage;
+    expect(start.mode).toBe('ffa');
+    expect(start.players.length).toBe(6); // 1 human + 5 bots
+
+    // The room simulates all 6 players authoritatively.
+    await c.waitUntil(() => (c.of('snap').at(-1)?.players.length ?? 0) === 6);
+
+    // Bots fight each other; someone reaches the FFA target → server declares a
+    // winner (one of the players in the match).
+    await c.waitUntil(() => c.of('over').length > 0, 15000);
+    const over = c.of('over')[0] as OverMessage;
+    expect(start.players).toContain(over.winner);
 
     c.close();
   });
