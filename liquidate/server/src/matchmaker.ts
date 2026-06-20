@@ -8,10 +8,13 @@
  */
 
 import type { ClientMessage, GameMap } from '@liquidate/shared';
+import { randomUUID } from 'node:crypto';
 import type { Connection } from './connection';
 import type { Bank } from './bank';
 import { Room, type RoomOptions } from './room';
-import { sendAccount, sendTreasury, type Session } from './session';
+import { makeBotConnection } from './botconnection';
+import { ServerBot } from './serverbot';
+import { sendAccount, sendTreasury, makeSession, type Session } from './session';
 import { log } from './logger';
 
 interface RoomCtx {
@@ -19,18 +22,21 @@ interface RoomCtx {
   slots: [Session, Session];
   stake: number;
   graceTimer?: ReturnType<typeof setTimeout>;
+  bot?: ServerBot;
 }
 
 export class Matchmaker {
   private readonly queue: Session[] = [];
   private readonly roomByConn = new Map<string, RoomCtx>();
   private readonly pausedByAccount = new Map<string, { ctx: RoomCtx; slot: 0 | 1 }>();
+  private readonly botFillTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly bank: Bank,
     private readonly pickMap: () => GameMap,
     private readonly opts: RoomOptions,
     private readonly graceMs: number,
+    private readonly botFillMs: number,
   ) {}
 
   /** Enqueue a logged-in session with a validated stake. */
@@ -42,6 +48,39 @@ export class Matchmaker {
     session.conn.send({ type: 'waiting' });
     this.queue.push(session);
     this.tryMatch();
+    // Still waiting? Fill the lobby with a bot after a short delay so it's never
+    // empty. (A human arriving first will match and clear this timer.)
+    if (this.queue.includes(session)) {
+      this.clearBotTimer(session.conn.id);
+      this.botFillTimers.set(
+        session.conn.id,
+        setTimeout(() => this.botFill(session), this.botFillMs),
+      );
+    }
+  }
+
+  private clearBotTimer(connId: string): void {
+    const t = this.botFillTimers.get(connId);
+    if (t) {
+      clearTimeout(t);
+      this.botFillTimers.delete(connId);
+    }
+  }
+
+  /** Pair a still-waiting human with a server bot in a free (no-stake) match. */
+  private botFill(session: Session): void {
+    this.clearBotTimer(session.conn.id);
+    const i = this.queue.indexOf(session);
+    if (i < 0) return;
+    this.queue.splice(i, 1);
+    if (!session.conn.isOpen()) return;
+
+    const botId = 'bot-' + randomUUID();
+    const bot = new ServerBot(botId);
+    const botConn = makeBotConnection(botId, (msg) => bot.onMessage(msg));
+    const botSession = makeSession(botConn);
+    log.info('bot_fill', { human: session.accountId, bot: botId });
+    this.startMatch(session, botSession, bot);
   }
 
   /** Route an in-match message to the connection's room (if any). */
@@ -66,6 +105,7 @@ export class Matchmaker {
 
   /** A connection dropped: leave the queue, or pause the match (grace) / forfeit. */
   remove(session: Session): void {
+    this.clearBotTimer(session.conn.id);
     const qi = this.queue.indexOf(session);
     if (qi >= 0) this.queue.splice(qi, 1);
 
@@ -91,6 +131,8 @@ export class Matchmaker {
     while (this.queue.length >= 2) {
       const a = this.queue.shift()!;
       const b = this.queue.shift()!;
+      this.clearBotTimer(a.conn.id);
+      this.clearBotTimer(b.conn.id);
       if (!a.conn.isOpen()) {
         if (b.conn.isOpen()) this.queue.unshift(b);
         continue;
@@ -103,7 +145,7 @@ export class Matchmaker {
     }
   }
 
-  private startMatch(a: Session, b: Session): void {
+  private startMatch(a: Session, b: Session, bot?: ServerBot): void {
     const stake = Math.min(a.stake, b.stake);
     const slots: [Session, Session] = [a, b];
 
@@ -130,16 +172,20 @@ export class Matchmaker {
         if (ref.ctx) this.settle(ref.ctx, winner, scores);
       },
     );
-    const ctx: RoomCtx = { room, slots, stake };
+    const ctx: RoomCtx = { room, slots, stake, bot };
     ref.ctx = ctx;
     this.roomByConn.set(a.conn.id, ctx);
     this.roomByConn.set(b.conn.id, ctx);
-    log.info('match_start', { a: a.accountId, b: b.accountId, stake });
+    // A bot drives the second slot by routing its inputs straight into the room
+    // (the Room validates them like any client). Must be wired before start().
+    if (bot) bot.attach((msg) => room.handleMessage(b.conn, msg));
+    log.info('match_start', { a: a.accountId, b: b.accountId, stake, bot: !!bot });
     room.start();
   }
 
   private settle(ctx: RoomCtx, winnerConnId: string | null, scores: Record<string, number>): void {
     if (ctx.graceTimer) clearTimeout(ctx.graceTimer);
+    ctx.bot?.stop();
     const [a, b] = ctx.slots;
     this.roomByConn.delete(a.conn.id);
     this.roomByConn.delete(b.conn.id);

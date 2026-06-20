@@ -22,6 +22,8 @@ export const MAX_TICK_DT = 0.05;
 export const MAX_REWIND_MS = 250;
 /** How long a disconnected player may take to reconnect before forfeiting (ms). */
 export const RECONNECT_GRACE_MS = 10000;
+/** How long a queued player waits for a human before a bot fills the lobby (ms). */
+export const BOT_FILL_MS = 6000;
 
 // --- Player ----------------------------------------------------------------
 export const PLAYER_RADIUS = 0.4; // horizontal collision radius (units = metres)
@@ -84,7 +86,8 @@ export interface WeaponConfig {
   spread: number; // max cone half-angle in radians (0 = pinpoint)
 }
 
-/** Balanced all-rounder; the default. ~4 body / 2 head to kill. */
+/** Balanced all-rounder; the default. Pinpoint per-shot (the SMG is the spray
+ *  weapon); spray feel comes from recoil. ~4 body / 2 head to kill. */
 export const ASSAULT: WeaponConfig = {
   id: 'assault',
   name: 'Assault',
@@ -95,7 +98,7 @@ export const ASSAULT: WeaponConfig = {
   reloadTime: 1.8,
   range: 200,
   pellets: 1,
-  spread: 0.012,
+  spread: 0,
 };
 
 /** Fast, spray-y, short range; rewards closing distance. */

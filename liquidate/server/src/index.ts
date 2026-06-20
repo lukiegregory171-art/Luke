@@ -14,6 +14,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  BOT_FILL_MS,
   DEFAULT_MAP,
   MAPS,
   RECONNECT_GRACE_MS,
@@ -41,6 +42,7 @@ const PORT = Number(process.env.PORT ?? SERVER_PORT);
 const targetKills = Number(process.env.TARGET_KILLS) || TARGET_KILLS;
 const respawnDelay = Number(process.env.RESPAWN_DELAY) || RESPAWN_DELAY;
 const graceMs = Number(process.env.RECONNECT_GRACE_MS) || RECONNECT_GRACE_MS;
+const botFillMs = Number(process.env.BOT_FILL_MS) || BOT_FILL_MS;
 const forcedMap: GameMap | undefined = process.env.MAP ? MAPS[process.env.MAP] : undefined;
 const pickMap = (): GameMap => forcedMap ?? randomMap();
 const initMap = forcedMap ?? DEFAULT_MAP;
@@ -104,7 +106,7 @@ const httpServer = createServer(serveStatic);
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
 const bank = new Bank(process.env.LIQUIDATE_DB ?? 'data/liquidate.sqlite');
-const matchmaker = new Matchmaker(bank, pickMap, { targetKills, respawnDelay }, graceMs);
+const matchmaker = new Matchmaker(bank, pickMap, { targetKills, respawnDelay }, graceMs, botFillMs);
 
 wss.on('connection', (socket: WebSocket) => {
   const id = randomUUID();
