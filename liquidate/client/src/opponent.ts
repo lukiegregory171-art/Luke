@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { Character } from './character';
+import { COLORS } from './palette';
 
 interface Frame {
   t: number; // server time (ms)
@@ -26,7 +27,8 @@ export class Opponent {
   private readonly buffer: Frame[] = [];
 
   constructor(scene: THREE.Scene) {
-    this.character = new Character(scene, { body: 0xff8a3d, head: 0xffd27f, visor: 0x16e0a3 });
+    // Enemy: dark body, RED team glow (locked readability).
+    this.character = new Character(scene, { body: 0x0e1719, team: COLORS.red });
   }
 
   /** Clear interpolation state between matches and hide the avatar. */

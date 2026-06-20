@@ -23,11 +23,11 @@
 
 import * as THREE from 'three';
 import { HEAD_SPHERE, MOVE_SPEED } from '@liquidate/shared';
+import { matte, neon } from './palette';
 
 export interface CharacterColors {
-  body: number;
-  head: number;
-  visor: number;
+  body: number; // dark matte body
+  team: number; // bright emissive team colour (visor + chest + ground ring)
 }
 
 const HIP_Y = 0.92; // leg pivot height
@@ -67,54 +67,49 @@ export class Character {
     private readonly scene: THREE.Scene,
     colors: CharacterColors,
   ) {
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: colors.body,
-      roughness: 0.55,
-      metalness: 0.1,
-    });
-    const headMat = new THREE.MeshStandardMaterial({
-      color: colors.head,
-      roughness: 0.45,
-      emissive: 0x331100,
-    });
-    const visorMat = new THREE.MeshStandardMaterial({
-      color: colors.visor,
-      emissive: colors.visor,
-      emissiveIntensity: 0.5,
-      roughness: 0.3,
-    });
-    const limbMat = new THREE.MeshStandardMaterial({
-      color: colors.body,
-      roughness: 0.6,
-      metalness: 0.1,
-    });
-    this.mats.push(bodyMat, headMat, visorMat, limbMat);
+    // ARTBIBLE: dark matte body, bright team-colour emissive accents. Low-poly
+    // flat-shaded so the silhouette reads; the team glow is what you track.
+    const bodyMat = matte(colors.body);
+    const teamMat = neon(colors.team, 2.4); // shared by visor + chest + ground ring
+    this.mats.push(bodyMat, teamMat);
 
     // Torso (chest tapering to waist), centred on the body hurtsphere height.
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.62, 12), bodyMat);
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.62, 8), bodyMat);
     torso.position.y = 1.18;
     torso.castShadow = true;
     torso.name = 'torso';
+    // Emissive chest plate (front-facing team glow).
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.06), teamMat);
+    chest.position.set(0, 1.22, -0.21);
 
-    // Head + forward visor (reads which way they face).
-    const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_SPHERE.radius, 18, 14), headMat);
+    // Head (dark) + forward visor (team glow — reads which way they face).
+    const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_SPHERE.radius, 8, 6), bodyMat);
     head.position.y = HEAD_SPHERE.centerY;
     head.castShadow = true;
     head.name = 'head';
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.07, 0.05), visorMat);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.05), teamMat);
     visor.position.set(0, HEAD_SPHERE.centerY, -HEAD_SPHERE.radius);
 
-    this.legL = makeLimb(LEG_LEN, 0.16, 0.18, limbMat, HIP_Y, -0.13);
-    this.legR = makeLimb(LEG_LEN, 0.16, 0.18, limbMat, HIP_Y, 0.13);
-    this.armL = makeLimb(ARM_LEN, 0.12, 0.13, limbMat, SHOULDER_Y, -0.3);
-    this.armR = makeLimb(ARM_LEN, 0.12, 0.13, limbMat, SHOULDER_Y, 0.3);
+    this.legL = makeLimb(LEG_LEN, 0.16, 0.18, bodyMat, HIP_Y, -0.13);
+    this.legR = makeLimb(LEG_LEN, 0.16, 0.18, bodyMat, HIP_Y, 0.13);
+    this.armL = makeLimb(ARM_LEN, 0.12, 0.13, bodyMat, SHOULDER_Y, -0.3);
+    this.armR = makeLimb(ARM_LEN, 0.12, 0.13, bodyMat, SHOULDER_Y, 0.3);
     this.legL.name = 'legL';
     this.legR.name = 'legR';
     this.armL.name = 'armL';
     this.armR.name = 'armR';
 
-    this.frame.add(torso, head, visor, this.legL, this.legR, this.armL, this.armR);
+    this.frame.add(torso, chest, head, visor, this.legL, this.legR, this.armL, this.armR);
     this.root.add(this.frame);
+
+    // Ground ring stays on the floor (on the root, not the animated frame), so it
+    // never bobs or topples — a clean readable footprint under the player.
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 8, 28), teamMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.04;
+    ring.name = 'ring';
+    this.root.add(ring);
+
     this.root.visible = false;
     this.scene.add(this.root);
   }

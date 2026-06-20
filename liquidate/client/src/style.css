@@ -1,8 +1,8 @@
 :root {
   color-scheme: dark;
-  --accent: #16e0a3;
-  --accent-dim: rgba(22, 224, 163, 0.55);
-  --danger: #e0556b;
+  --accent: #16f08a;
+  --accent-dim: rgba(22, 240, 138, 0.55);
+  --danger: #ff3b47;
   --text: #d6e1ea;
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
@@ -16,7 +16,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #05070a;
+  background: #070b0c;
   color: var(--text);
 }
 
@@ -510,7 +510,7 @@ button.ghost:hover {
 #lobby-handle {
   flex: 1;
   max-width: 240px;
-  background: #05070a;
+  background: #070b0c;
   border: 1px solid #1a2530;
   border-radius: 6px;
   color: var(--text);
@@ -636,7 +636,7 @@ button.ghost:hover {
 .wallet #wallet-addr {
   flex: 1;
   max-width: 230px;
-  background: #05070a;
+  background: #070b0c;
   border: 1px solid #1a2530;
   border-radius: 6px;
   color: var(--text);
@@ -656,7 +656,7 @@ button.ghost:hover {
   color: #6b7a89;
 }
 .lobby-graphics select {
-  background: #05070a;
+  background: #070b0c;
   border: 1px solid #1a2530;
   color: var(--text);
   border-radius: 5px;
@@ -713,7 +713,7 @@ button.ghost:hover {
   z-index: 40;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 50% 30%, rgba(16, 32, 43, 0.95), #05070a 70%);
+  background: radial-gradient(circle at 50% 30%, rgba(16, 32, 43, 0.95), #070b0c 70%);
   transition: opacity 0.45s ease;
 }
 #loading.done {

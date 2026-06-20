@@ -22,6 +22,7 @@ import {
   type Vec3,
 } from '@liquidate/shared';
 import { Character } from './character';
+import { COLORS } from './palette';
 
 const TURN_RATE = 5.5; // rad/s aim slew
 const DESIRED_RANGE = 11; // metres the bot tries to hold
@@ -54,7 +55,7 @@ export class Bot {
   constructor(scene: THREE.Scene, spawn: Vec3) {
     this.move = makeMoveState(spawn);
     // Red-visor team tint to distinguish the bot from a networked opponent.
-    this.character = new Character(scene, { body: 0xff8a3d, head: 0xffd27f, visor: 0xff3344 });
+    this.character = new Character(scene, { body: 0x0e1719, team: COLORS.red });
     this.renderAvatar(0); // place + show upright at spawn
   }
 

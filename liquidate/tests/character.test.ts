@@ -13,7 +13,7 @@ import { Character } from '../client/src/character';
 
 function makeCharacter() {
   const scene = new THREE.Scene();
-  return new Character(scene, { body: 0xff8a3d, head: 0xffd27f, visor: 0x16e0a3 });
+  return new Character(scene, { body: 0x0e1719, team: 0xff3b47 });
 }
 
 describe('Character (P2, cosmetic-only)', () => {

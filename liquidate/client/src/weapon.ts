@@ -78,15 +78,19 @@ export class Weapon {
     private readonly scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
   ) {
-    // Build a simple rifle out of a few boxes, parented to the camera.
+    // Build a simple rifle out of a few boxes, parented to the camera (ARTBIBLE:
+    // low-poly matte body + emissive neon accent).
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x1a2028,
-      roughness: 0.5,
-      metalness: 0.6,
+      color: 0x0c1413,
+      flatShading: true,
+      roughness: 0.85,
+      metalness: 0.05,
     });
     this.accentMat = new THREE.MeshStandardMaterial({
-      color: ACCENT_DEFAULT,
-      emissive: 0x0c5a42,
+      color: 0x05100c,
+      flatShading: true,
+      emissive: ACCENT_DEFAULT,
+      emissiveIntensity: 2.2,
       roughness: 0.4,
     });
     const accentMat = this.accentMat;

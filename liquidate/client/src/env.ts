@@ -25,41 +25,28 @@ export interface EnvTheme {
   obstacle: number;
 }
 
+// Locked palette (ARTBIBLE.md): dark desaturated env so neon/players POP.
 export const DEFAULT_ENV: EnvTheme = {
-  fog: 0x0c1420,
-  fogNear: 20,
-  fogFar: 72,
-  floor: 0x1b2735,
-  wall: 0x232f3b,
-  obstacle: 0x2b3b49,
+  fog: 0x070b0c,
+  fogNear: 18,
+  fogFar: 60,
+  floor: 0x0b1112,
+  wall: 0x0e1719,
+  obstacle: 0x14201e,
 };
 
-/** Distinct mood per map (cool industrial / warm refinery / violet vault). */
+/** Per-map identity is a subtle fog tint; floor/wall/crate stay locked. */
 export const ENV_THEMES: Record<string, EnvTheme> = {
   crossfire: DEFAULT_ENV,
-  refinery: {
-    fog: 0x161009,
-    fogNear: 18,
-    fogFar: 70,
-    floor: 0x281f17,
-    wall: 0x33291d,
-    obstacle: 0x3d3324,
-  },
-  vault: {
-    fog: 0x0f0a16,
-    fogNear: 18,
-    fogFar: 72,
-    floor: 0x201a2b,
-    wall: 0x2a2336,
-    obstacle: 0x342b44,
-  },
+  refinery: { ...DEFAULT_ENV, fog: 0x0a0c0a }, // faint warm
+  vault: { ...DEFAULT_ENV, fog: 0x0a0710 }, // faint violet
 };
 
 export function envTheme(map: GameMap): EnvTheme {
   return ENV_THEMES[map.id] ?? DEFAULT_ENV;
 }
 
-const ACCENT = 0x16e0a3; // default; World.setAccent retints the returned accentMats
+const ACCENT = 0x16f08a; // locked brand green; World.setAccent retints these
 
 /**
  * Build the decorative dressing for a map. Returns the group to add to the

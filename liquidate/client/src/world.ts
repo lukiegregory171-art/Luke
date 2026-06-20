@@ -1,31 +1,23 @@
 /**
- * Three.js scene + modern render pipeline (P0). Geometry is still derived from
- * the SAME shared `GameMap` the server uses for collision/occlusion — what you
- * see is what you collide with. NONE of this rendering touches authority.
+ * Three.js scene + the LOCKED stylized pipeline (M2, ARTBIBLE.md). Geometry is
+ * still derived from the SAME shared `GameMap` the server uses for collision /
+ * occlusion — what you see is what you collide with. NONE of this touches
+ * authority.
  *
- * Pipeline: linear/sRGB workflow with ACES filmic tone mapping, image-based
- * lighting (procedural RoomEnvironment via PMREM — zero external art, with a
- * slot to drop in an HDRI later), a sun/key + hemisphere fill + neon rim light
- * rig with soft (PCF) shadows, and a pmndrs post stack (bloom / SMAA / vignette
- * / film grain / ACES tone-map). Quality presets + dynamic resolution scaling
- * hold the frame rate; a perf HUD reports the cost.
+ * Look (locked): low-poly flat-shaded matte + emissive-neon materials on the
+ * locked palette, a dark desaturated arena so players/neon POP, a hemisphere +
+ * warm key (PCF soft shadows) + cyan/magenta point rims + a warm hero light at a
+ * rotating emissive "arena core" rig, ACESFilmic tone mapping @1.05, FOV 80, and
+ * the SIGNATURE bloom chain: RenderPass → UnrealBloomPass(0.9/0.55/0.85) →
+ * OutputPass (threshold ~0.85 so only emissives bloom). Quality presets + dynamic
+ * resolution hold the frame rate; a perf HUD reports the cost.
  */
 
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import {
-  BloomEffect,
-  EffectComposer,
-  EffectPass,
-  NoiseEffect,
-  RenderPass,
-  SMAAEffect,
-  ToneMappingEffect,
-  ToneMappingMode,
-  VignetteEffect,
-  BlendFunction,
-} from 'postprocessing';
-import { N8AOPostPass } from 'n8ao';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { GameMap } from '@liquidate/shared';
 import {
   QUALITY,
@@ -35,9 +27,9 @@ import {
   type QualitySettings,
 } from './quality';
 import { buildDressing, envTheme, type EnvTheme } from './env';
+import { COLORS, matte, neon } from './palette';
+import { makeGridTexture, makeTickerTexture } from './textures';
 import type { PerfHud } from './perf';
-
-const ACCENT = 0x16e0a3;
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -45,68 +37,68 @@ export class World {
   readonly renderer: THREE.WebGLRenderer;
 
   private composer!: EffectComposer;
+  private bloom!: UnrealBloomPass;
   private readonly arena = new THREE.Group();
   private readonly key: THREE.DirectionalLight;
-  private readonly rim: THREE.DirectionalLight;
+
+  // Rotating emissive "arena core" (octahedron + torus halo + hero light).
+  private readonly core = new THREE.Group();
+  private readonly coreOcta: THREE.Mesh;
+  private readonly coreHalo: THREE.Mesh;
+
   private quality: QualitySettings;
   private level: QualityLevel;
   private renderScale = 1;
-  private avgMs = 16.7;
+  private avgMs = 7;
   private dpr = Math.min(window.devicePixelRatio, 2);
 
-  // Skin accent (P4): neon grid + obstacle edges + rim light retint to this.
-  // Cosmetic only — never affects geometry the server collides against.
-  private accent = ACCENT;
+  // Skin accent (P4): crate neon + dressing trim retint to this. Cosmetic only.
+  private accent: number = COLORS.green;
   private accentMats: THREE.Material[] = [];
 
   constructor(
     private readonly container: HTMLElement,
     private readonly perf: PerfHud,
   ) {
-    this.scene.background = new THREE.Color(0x0c1420);
-    this.scene.fog = new THREE.Fog(0x0c1420, 26, 80);
+    this.scene.background = new THREE.Color(COLORS.env);
+    this.scene.fog = new THREE.Fog(COLORS.env, 18, 60);
 
-    this.camera = new THREE.PerspectiveCamera(
-      82,
-      window.innerWidth / window.innerHeight,
-      0.05,
-      500,
-    );
+    this.camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.05, 500);
     this.camera.rotation.order = 'YXZ'; // yaw (Y) then pitch (X) => matches shared aimDirection
 
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: false, // SMAA in the post stack handles AA
-      powerPreference: 'high-performance',
-      stencil: false,
-    });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: false });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.toneMapping = THREE.NoToneMapping; // ACES applied in the composer
-    this.renderer.info.autoReset = false; // reset once/frame so draw-call stats cover all passes
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.info.autoReset = false; // reset once/frame so draw-call stats cover all passes
     this.container.appendChild(this.renderer.domElement);
 
-    // Image-based lighting from a procedural room (reflections + soft ambient).
-    // LIMITATION: a real Poly Haven HDRI would look better; this is the
-    // zero-external-art layer, with scene.environment as the drop-in slot.
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
+    // --- Locked light rig ---------------------------------------------------
+    const hemi = new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 0.55);
 
-    // Light rig: warm key (sun) with shadows, cool hemisphere fill, neon rim,
-    // and a low ambient lift so shadowed areas never crush to pure black.
-    this.key = new THREE.DirectionalLight(0xfff2e0, 3.2);
-    this.key.position.set(12, 24, 8);
+    this.key = new THREE.DirectionalLight(COLORS.keyLight, 1.15);
+    this.key.position.set(14, 26, 10);
     this.key.castShadow = true;
     this.key.shadow.bias = -0.0004;
     this.key.shadow.normalBias = 0.04;
-    this.scene.add(this.key, this.key.target);
 
-    const hemi = new THREE.HemisphereLight(0xbcd8ff, 0x202832, 1.4);
-    this.rim = new THREE.DirectionalLight(ACCENT, 1.0);
-    this.rim.position.set(-12, 9, -14);
-    const ambient = new THREE.AmbientLight(0x2a3a4e, 0.5);
-    this.scene.add(hemi, this.rim, ambient);
+    const cyanRim = new THREE.PointLight(COLORS.cyan, 60, 60, 2);
+    cyanRim.position.set(-14, 8, -12);
+    const magentaRim = new THREE.PointLight(COLORS.magenta, 60, 60, 2);
+    magentaRim.position.set(14, 8, 12);
+
+    this.scene.add(hemi, this.key, this.key.target, cyanRim, magentaRim);
+
+    // --- Arena core: rotating emissive centerpiece + warm hero light --------
+    this.coreOcta = new THREE.Mesh(new THREE.OctahedronGeometry(0.9), neon(COLORS.gold, 2.5));
+    this.coreHalo = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.07, 10, 40), neon(COLORS.cyan, 2.4));
+    this.coreHalo.rotation.x = Math.PI / 2;
+    const hero = new THREE.PointLight(COLORS.keyLight, 40, 50, 2);
+    this.core.add(this.coreOcta, this.coreHalo, hero);
+    this.core.position.set(0, 6, 0);
+    this.scene.add(this.core);
 
     this.scene.add(this.arena);
 
@@ -135,20 +127,21 @@ export class World {
     this.arena.clear();
 
     const theme = envTheme(map);
-    const far = Math.max(theme.fogFar, Math.max(map.width, map.depth) * 1.7);
-    this.scene.fog = new THREE.Fog(theme.fog, theme.fogNear, far);
+    const far = Math.max(60, Math.max(map.width, map.depth) * 1.7);
+    this.scene.fog = new THREE.Fog(theme.fog, 18, far);
     this.scene.background = new THREE.Color(theme.fog);
 
-    this.buildArena(map, theme); // resets accentMats with the neon grid + edges
+    this.buildArena(map, theme); // resets accentMats with the crate neon
     const { group, accentMats } = buildDressing(map, theme);
     this.arena.add(group);
     this.accentMats.push(...accentMats);
-    this.setAccent(this.accent); // retint all neon (grid/edges/trim/pylons) to the active skin
+    this.setAccent(this.accent); // retint neon to the active skin
 
+    this.core.position.set(0, map.wallHeight + 1.8, 0);
     this.fitShadowCamera(map);
   }
 
-  /** Fit the (single-cascade) shadow camera tightly to the arena for crisp shadows. */
+  /** Fit the shadow camera tightly to the arena for crisp soft shadows. */
   private fitShadowCamera(map: GameMap): void {
     const r = Math.max(map.width, map.depth) * 0.62;
     const cam = this.key.shadow.camera;
@@ -157,47 +150,33 @@ export class World {
     cam.top = r;
     cam.bottom = -r;
     cam.near = 1;
-    cam.far = 70;
+    cam.far = 80;
     cam.updateProjectionMatrix();
     this.key.target.position.set(0, 0, 0);
   }
 
   private buildArena(map: GameMap, theme: EnvTheme): void {
-    // Polished dark-metal floor (reflects the environment + neon).
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: theme.floor,
-      metalness: 0.35,
-      roughness: 0.5,
-      envMapIntensity: 1.2,
+    this.accentMats = [];
+
+    // Floor: matte dark plane with an emissive glowing grid (canvas map).
+    const grid = makeGridTexture(COLORS.cyan);
+    grid.repeat.set(map.width / 2, map.depth / 2);
+    const floorMat = matte(theme.floor, {
+      emissive: 0xffffff,
+      emissiveMap: grid,
+      emissiveIntensity: 1.3,
     });
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(map.width, map.depth), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.arena.add(floor);
 
-    // Emissive neon grid (blooms). Built from plain line segments with a single
-    // retintable material so a skin accent can recolour it live.
-    this.accentMats = [];
-    const gridMat = new THREE.LineBasicMaterial({
-      color: this.accent,
-      transparent: true,
-      opacity: 0.3,
-    });
-    this.accentMats.push(gridMat);
-    const grid = this.buildGrid(Math.max(map.width, map.depth), gridMat);
-    grid.position.y = 0.02;
-    this.arena.add(grid);
-
-    // Perimeter walls.
+    // Perimeter walls (matte) + a few emissive ticker panels (crypto signage).
     const halfW = map.width / 2;
     const halfD = map.depth / 2;
     const h = map.wallHeight;
     const t = 0.4;
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: theme.wall,
-      metalness: 0.2,
-      roughness: 0.7,
-    });
+    const wallMat = matte(theme.wall);
     const walls: [number, number, number, number][] = [
       [0, -halfD, map.width, t],
       [0, halfD, map.width, t],
@@ -211,26 +190,18 @@ export class World {
       wall.receiveShadow = true;
       this.arena.add(wall);
     }
+    this.addTickerPanels(map);
 
-    // Cover obstacles: PBR box + bright neon edge that blooms.
-    const obsMat = new THREE.MeshStandardMaterial({
-      color: theme.obstacle,
-      metalness: 0.3,
-      roughness: 0.5,
-      envMapIntensity: 1.1,
-    });
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: this.accent,
-      transparent: true,
-      opacity: 0.85,
-    });
+    // Cover crates: matte box + bright neon edge accent that blooms (retintable).
+    const crateMat = matte(theme.obstacle);
+    const edgeMat = new THREE.LineBasicMaterial({ color: this.accent });
     this.accentMats.push(edgeMat);
     for (const box of map.obstacles) {
       const sx = box.max.x - box.min.x;
       const sy = box.max.y - box.min.y;
       const sz = box.max.z - box.min.z;
       const geo = new THREE.BoxGeometry(sx, sy, sz);
-      const mesh = new THREE.Mesh(geo, obsMat);
+      const mesh = new THREE.Mesh(geo, crateMat);
       mesh.position.set(
         (box.min.x + box.max.x) / 2,
         (box.min.y + box.max.y) / 2,
@@ -246,30 +217,33 @@ export class World {
     }
   }
 
-  /** A floor grid as line segments sharing one (retintable) material. */
-  private buildGrid(size: number, mat: THREE.LineBasicMaterial): THREE.LineSegments {
-    const divisions = Math.round(size);
-    const step = size / divisions;
-    const half = size / 2;
-    const pts: number[] = [];
-    for (let i = 0; i <= divisions; i++) {
-      const p = -half + i * step;
-      pts.push(-half, 0, p, half, 0, p); // line along X
-      pts.push(p, 0, -half, p, 0, half); // line along Z
+  /** Emissive candlestick "ticker" panels on the long walls (crypto identity). */
+  private addTickerPanels(map: GameMap): void {
+    const tex = makeTickerTexture();
+    const panelMat = new THREE.MeshStandardMaterial({
+      color: 0x000000,
+      emissive: 0xffffff,
+      emissiveMap: tex,
+      emissiveIntensity: 1.5,
+    });
+    const halfD = map.depth / 2;
+    const y = Math.min(2.4, map.wallHeight - 0.6);
+    const pw = Math.min(8, map.width * 0.5);
+    for (const sign of [-1, 1] as const) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw / 4), panelMat);
+      panel.position.set(0, y, sign * (halfD - 0.25));
+      panel.rotation.y = sign < 0 ? 0 : Math.PI;
+      this.arena.add(panel);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    return new THREE.LineSegments(geo, mat);
   }
 
   /**
-   * Retint the arena neon + rim light to a skin accent (P4). Cosmetic only:
-   * touches material colours and a light, never geometry or anything the server
-   * collides against. Skins are client-local and never sent to the server.
+   * Retint the crate neon + dressing trim to a skin accent (P4). Cosmetic only:
+   * touches material colours, never geometry or anything the server collides
+   * against. Skins are client-local and never sent to the server.
    */
   setAccent(hex: number): void {
     this.accent = hex;
-    this.rim.color.setHex(hex);
     for (const m of this.accentMats) {
       const mm = m as THREE.MeshStandardMaterial & THREE.LineBasicMaterial;
       mm.color?.setHex(hex);
@@ -281,42 +255,23 @@ export class World {
 
   private buildComposer(): void {
     this.composer?.dispose();
-    this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType });
+    const db = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(db.x, db.y, {
+      type: THREE.HalfFloatType,
+      samples: this.quality.smaa ? 4 : 0, // MSAA on capable presets
+    });
+    this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-    // Ground-contact ambient occlusion (high/ultra) — darkens crevices and where
-    // cover meets the floor. Applied to the linear render before bloom/tonemap.
-    if (this.quality.ssao) {
-      const ao = new N8AOPostPass(this.scene, this.camera, window.innerWidth, window.innerHeight);
-      ao.configuration.aoRadius = 1.6;
-      ao.configuration.distanceFalloff = 1.0;
-      ao.configuration.intensity = 2.4;
-      ao.setQualityMode(this.level === 'ultra' ? 'High' : 'Medium');
-      this.composer.addPass(ao);
-    }
-
-    const effects = [];
-    if (this.quality.bloom) {
-      effects.push(
-        new BloomEffect({
-          intensity: 0.9,
-          luminanceThreshold: 0.7,
-          luminanceSmoothing: 0.25,
-          mipmapBlur: true,
-          radius: 0.7,
-        }),
-      );
-    }
-    if (this.quality.vignette) effects.push(new VignetteEffect({ darkness: 0.5, offset: 0.32 }));
-    if (this.quality.grain) {
-      const noise = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY });
-      noise.blendMode.opacity.value = 0.045;
-      effects.push(noise);
-    }
-    effects.push(new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }));
-    if (this.quality.smaa) effects.push(new SMAAEffect());
-
-    this.composer.addPass(new EffectPass(this.camera, ...effects));
+    // THE SIGNATURE: only emissives cross the 0.85 threshold and bloom.
+    this.bloom = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.9, // strength
+      0.55, // radius
+      0.85, // threshold
+    );
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass()); // ACES tone map + sRGB, final
   }
 
   applyQuality(level: QualityLevel): void {
@@ -346,10 +301,10 @@ export class World {
   private updateDynamicResolution(dtMs: number): void {
     this.avgMs = this.avgMs * 0.9 + dtMs * 0.1;
     if (!this.quality.dynamicResolution) return;
-    // Hold ~60fps: shrink if we're slow, grow back when we have headroom.
+    // Defend the frame rate: shrink if slow, grow back when there's headroom.
     let next = this.renderScale;
-    if (this.avgMs > 19 && this.renderScale > 0.6) next = this.renderScale - 0.05;
-    else if (this.avgMs < 14 && this.renderScale < 1) next = this.renderScale + 0.05;
+    if (this.avgMs > 11 && this.renderScale > 0.6) next = this.renderScale - 0.05;
+    else if (this.avgMs < 8 && this.renderScale < 1) next = this.renderScale + 0.05;
     if (Math.abs(next - this.renderScale) > 0.001) {
       this.renderScale = Math.max(0.6, Math.min(1, next));
       this.applyRenderScale();
@@ -363,12 +318,7 @@ export class World {
     this.composer.setSize(window.innerWidth, window.innerHeight);
   };
 
-  /**
-   * Compile shaders + prime the post stack before the first real frame (P1), so
-   * pointer-lock doesn't begin with a multi-hundred-ms stutter while the GPU
-   * links programs (SMAA/bloom/AO/tonemap all compile on first use). Called once
-   * behind the loading screen.
-   */
+  /** Compile shaders + prime the bloom chain behind the loading screen (P1). */
   async warmup(): Promise<void> {
     await this.renderer.compileAsync(this.scene, this.camera);
     this.renderer.info.reset();
@@ -379,6 +329,10 @@ export class World {
     this.perf.begin();
     const dtMs = Math.min(dt * 1000, 100);
     this.updateDynamicResolution(dtMs);
+    // Spin the arena core (cosmetic).
+    this.coreOcta.rotation.y += dt * 0.6;
+    this.coreOcta.rotation.x += dt * 0.25;
+    this.coreHalo.rotation.z += dt * 0.4;
     this.renderer.info.reset();
     this.composer.render(dt);
     this.perf.end(this.renderer, dtMs);
