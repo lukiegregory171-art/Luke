@@ -50,7 +50,10 @@ function harness(difficulty = 1) {
   bot.attach((m) => routed.push(m));
   const start: ServerMessage = {
     type: 'start',
+    mode: 'duel',
     opponentId: 'H',
+    players: ['B', 'H'],
+    names: { B: 'BOT', H: 'H' },
     selfSpawnIndex: 0,
     map: FLAT,
     stake: 0,

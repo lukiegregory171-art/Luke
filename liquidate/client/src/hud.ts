@@ -5,6 +5,36 @@
 
 import { MAX_HEALTH } from '@liquidate/shared';
 
+export interface ScoreRow {
+  name: string;
+  frags: number;
+  self: boolean;
+  alive: boolean;
+}
+
+/** Escape user-supplied handles before inserting into innerHTML (XSS-safe). */
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!;
+  });
+}
+
+/** Build a scoreboard table (shared by the in-match Tab view + the over card). */
+export function scoreboardHTML(rows: ScoreRow[], title: string): string {
+  const body = rows
+    .map(
+      (r, i) =>
+        `<tr class="${r.self ? 'me' : ''}${r.alive ? '' : ' dead'}">` +
+        `<td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.frags}</td></tr>`,
+    )
+    .join('');
+  return (
+    `<div class="sb-title">${esc(title)}</div>` +
+    `<table><thead><tr><th>#</th><th>PLAYER</th><th>FRAGS</th></tr></thead>` +
+    `<tbody>${body}</tbody></table>`
+  );
+}
+
 export class Hud {
   private readonly root = document.getElementById('hud') as HTMLElement;
   private readonly ammo = document.getElementById('ammo') as HTMLElement;
@@ -24,6 +54,7 @@ export class Hud {
   private readonly crosshair = document.getElementById('crosshair') as HTMLElement;
   private readonly lowhp = document.getElementById('lowhp') as HTMLElement;
   private readonly dmgnums = document.getElementById('dmgnums') as HTMLElement;
+  private readonly scoreboard = document.getElementById('scoreboard') as HTMLElement;
 
   private hitTimer?: ReturnType<typeof setTimeout>;
   private bannerTimer?: ReturnType<typeof setTimeout>;
@@ -56,6 +87,16 @@ export class Hud {
   /** FFA: your frags vs the current leader. */
   setFrags(self: number, leader: number): void {
     this.score.innerHTML = `FRAGS&nbsp;<b>${self}</b>&nbsp;·&nbsp;LEAD&nbsp;<b>${leader}</b>`;
+  }
+
+  /** Live scoreboard (held Tab). */
+  showScoreboard(rows: ScoreRow[] | null): void {
+    if (!rows) {
+      this.scoreboard.classList.add('hidden');
+      return;
+    }
+    this.scoreboard.innerHTML = scoreboardHTML(rows, 'SCOREBOARD');
+    this.scoreboard.classList.remove('hidden');
   }
 
   setHealth(hp: number): void {

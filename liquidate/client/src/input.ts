@@ -13,6 +13,7 @@ export class Input {
   pitch = 0;
   firing = false;
   locked = false;
+  scoreboard = false; // Tab held — show the live scoreboard
   sensitivity = DEFAULT_SENSITIVITY;
 
   readonly keys = new Set<string>();
@@ -39,6 +40,7 @@ export class Input {
     this.locked = document.pointerLockElement === this.target;
     if (!this.locked) {
       this.firing = false;
+      this.scoreboard = false;
       this.keys.clear();
     }
     this.onLockChange(this.locked);
@@ -62,6 +64,10 @@ export class Input {
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     if (!this.locked) return;
+    if (e.code === 'Tab') {
+      this.scoreboard = true;
+      e.preventDefault(); // don't shift focus
+    }
     const fresh = !this.keys.has(e.code);
     this.keys.add(e.code);
     if (!fresh) return; // ignore auto-repeat for edge-triggered actions
@@ -73,6 +79,7 @@ export class Input {
   };
 
   private handleKeyUp = (e: KeyboardEvent): void => {
+    if (e.code === 'Tab') this.scoreboard = false;
     this.keys.delete(e.code);
   };
 

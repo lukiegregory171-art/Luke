@@ -206,7 +206,7 @@ export class Matchmaker {
     const sessions: Session[] = [...humans];
     const bindings: BotBinding[] = [];
     for (let i = humans.length; i < FFA_SIZE; i++) {
-      const { session, binding } = this.makeBot();
+      const { session, binding } = this.makeBot(`BOT ${i - humans.length + 1}`);
       sessions.push(session);
       bindings.push(binding);
     }
@@ -219,11 +219,13 @@ export class Matchmaker {
     }
   }
 
-  private makeBot(): { session: Session; binding: BotBinding } {
+  private makeBot(name = 'BOT'): { session: Session; binding: BotBinding } {
     const id = 'bot-' + randomUUID();
     const bot = new ServerBot(id);
     const conn = makeBotConnection(id, (msg) => bot.onMessage(msg));
-    return { session: makeSession(conn), binding: { bot, conn } };
+    const session = makeSession(conn);
+    session.handle = name; // shown on the scoreboard
+    return { session, binding: { bot, conn } };
   }
 
   private startDuel(a: Session, b: Session): void {
@@ -252,6 +254,7 @@ export class Matchmaker {
     const ref: { ctx?: RoomCtx } = {};
     const room = new Room(
       sessions.map((s) => s.conn),
+      sessions.map((s) => s.handle ?? 'Player'),
       this.pickMap(),
       {
         targetKills: mode === 'ffa' ? this.opts.ffaTargetKills : this.opts.targetKills,

@@ -35,7 +35,7 @@ import {
 import type { World } from './world';
 import type { Input } from './input';
 import type { Weapon } from './weapon';
-import type { Hud } from './hud';
+import type { Hud, ScoreRow } from './hud';
 import type { Net } from './net';
 import type { Opponents } from './opponents';
 import type { Sfx } from './audio';
@@ -48,8 +48,11 @@ const INTERP_MS = 100; // render the opponent this far in the past
 export interface MatchResult {
   win: boolean;
   oppLeft: boolean;
+  mode: MatchMode;
   selfScore: number;
   oppScore: number;
+  board: ScoreRow[]; // final standings, sorted by frags desc
+  place: number; // self's 1-based rank
   stake: number;
   pot: number;
   rake: number;
@@ -84,6 +87,8 @@ export class Match {
   private selfScore = 0;
   private oppScore = 0; // leader among the other players (for the scoreboard/result)
   private lastHeadshot = false;
+  private names: Record<string, string> = {};
+  private snapPlayers: { id: string; score: number; alive: boolean }[] = [];
 
   private lastSnapTime = 0;
   private lastSnapArrival = 0;
@@ -153,6 +158,8 @@ export class Match {
   private begin(start: StartMessage): void {
     this.map = start.map;
     this.mode = start.mode;
+    this.names = start.names;
+    this.snapPlayers = [];
     this.world.setMap(this.map);
     this.spawnIndex = start.selfSpawnIndex;
     const spawn = this.map.spawns[this.spawnIndex];
@@ -202,6 +209,10 @@ export class Match {
     this.weapon.update(dt, { speed: selfSpeed, yaw: this.input.yaw, pitch: this.input.pitch });
     if (this.selfAlive && this.input.locked) this.sfx.footsteps(dt, selfSpeed);
     this.hud.setLatency(this.net.latency);
+    // Live scoreboard while Tab is held.
+    this.hud.showScoreboard(
+      this.input.scoreboard && this.snapPlayers.length ? this.rows(this.snapPlayers) : null,
+    );
   }
 
   private sampleInput(step: number): void {
@@ -320,6 +331,7 @@ export class Match {
     }
     this.opponents.retainOnly(present);
     this.oppScore = leader;
+    this.snapPlayers = msg.players.map((p) => ({ id: p.id, score: p.score, alive: p.alive }));
 
     this.lastSnapTime = msg.serverTime;
     this.lastSnapArrival = performance.now();
@@ -330,6 +342,18 @@ export class Match {
   private updateScoreboard(): void {
     if (this.mode === 'ffa') this.hud.setFrags(this.selfScore, this.oppScore);
     else this.hud.setScores(this.selfScore, this.oppScore);
+  }
+
+  /** Build sorted scoreboard rows from {id,score,alive} entries. */
+  private rows(entries: { id: string; score: number; alive: boolean }[]): ScoreRow[] {
+    return entries
+      .map((e) => ({
+        name: this.names[e.id] ?? 'Player',
+        frags: e.score,
+        self: e.id === this.selfId,
+        alive: e.alive,
+      }))
+      .sort((a, b) => b.frags - a.frags);
   }
 
   private renderOpponentShot(weapon: WeaponId, origin: Vec3, dir: Vec3): void {
@@ -394,12 +418,20 @@ export class Match {
     if (this.over) return;
     this.over = true;
     this.playing = false;
+    this.hud.showScoreboard(null);
     const win = over.winner === this.selfId;
+    const board = this.rows(
+      Object.entries(over.scores).map(([id, score]) => ({ id, score, alive: true })),
+    );
+    const place = board.findIndex((r) => r.self) + 1;
     this.callbacks.onOver({
       win,
       oppLeft: this.oppLeft,
+      mode: this.mode,
       selfScore: this.selfScore,
       oppScore: this.oppScore,
+      board,
+      place,
       stake: over.stake,
       pot: over.pot,
       rake: over.rake,

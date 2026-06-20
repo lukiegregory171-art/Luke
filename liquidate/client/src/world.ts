@@ -118,6 +118,12 @@ export class World {
     return this.level;
   }
 
+  /** Set the camera field of view (degrees). Cosmetic — aim is yaw/pitch. */
+  setFov(deg: number): void {
+    this.camera.fov = deg;
+    this.camera.updateProjectionMatrix();
+  }
+
   /** Build (or rebuild) the arena geometry + environment dressing for a map. */
   setMap(map: GameMap): void {
     this.arena.traverse((obj) => {

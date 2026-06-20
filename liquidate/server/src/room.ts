@@ -64,6 +64,7 @@ const HISTORY_MS = 1000;
 
 interface PlayerSim {
   conn: Connection;
+  name: string;
   spawnIndex: number;
   connected: boolean;
   move: MoveState;
@@ -97,6 +98,7 @@ export class Room {
 
   constructor(
     conns: Connection[],
+    names: string[],
     private readonly map: GameMap,
     private readonly opts: RoomOptions,
     private readonly stake: number,
@@ -107,13 +109,14 @@ export class Room {
     ) => void,
   ) {
     this.mode = opts.mode;
-    this.players = conns.map((c, i) => this.makePlayer(c, i));
+    this.players = conns.map((c, i) => this.makePlayer(c, names[i] ?? c.id, i));
   }
 
-  private makePlayer(conn: Connection, spawnIndex: number): PlayerSim {
+  private makePlayer(conn: Connection, name: string, spawnIndex: number): PlayerSim {
     const spawn = this.map.spawns[spawnIndex % this.map.spawns.length];
     return {
       conn,
+      name,
       spawnIndex,
       connected: true,
       move: makeMoveState(spawn.pos),
@@ -142,11 +145,14 @@ export class Room {
 
   private sendStart(p: PlayerSim): void {
     const others = this.players.filter((o) => o !== p);
+    const names: Record<string, string> = {};
+    for (const o of this.players) names[o.conn.id] = o.name;
     p.conn.send({
       type: 'start',
       mode: this.mode,
       opponentId: this.mode === 'duel' && others[0] ? others[0].conn.id : '',
       players: this.players.map((o) => o.conn.id),
+      names,
       selfSpawnIndex: p.spawnIndex,
       map: this.map,
       stake: this.stake,

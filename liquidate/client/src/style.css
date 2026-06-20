@@ -792,3 +792,62 @@ button.ghost:hover {
   font-size: 0.72rem;
   color: #7c8a98;
 }
+
+/* --- Scoreboard (live Tab view + end-of-match) ---------------------------- */
+#scoreboard {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  background: rgba(7, 11, 12, 0.82);
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  padding: 0.8rem 1.1rem;
+  min-width: 300px;
+  backdrop-filter: blur(2px);
+}
+.sb-title {
+  text-align: center;
+  letter-spacing: 0.25em;
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+#scoreboard table,
+.over-board table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+#scoreboard th,
+.over-board th {
+  color: #6b7a89;
+  font-weight: 600;
+  text-align: left;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  padding: 2px 10px;
+}
+#scoreboard td,
+.over-board td {
+  padding: 3px 10px;
+}
+#scoreboard th:last-child,
+#scoreboard td:last-child,
+.over-board th:last-child,
+.over-board td:last-child {
+  text-align: right;
+}
+#scoreboard tr.me,
+.over-board tr.me {
+  color: var(--accent);
+  font-weight: 700;
+}
+#scoreboard tr.dead,
+.over-board tr.dead {
+  opacity: 0.5;
+}
+.over-board {
+  margin: 0 auto 1.4rem;
+  max-width: 340px;
+}

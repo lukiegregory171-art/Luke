@@ -13,9 +13,12 @@ export interface Settings {
   volume: number; // 0..1
   muted: boolean;
   sensitivity: number; // 0..1 slider position
+  fov: number; // vertical FOV in degrees
 }
 
-export const DEFAULT_SETTINGS: Settings = { volume: 0.7, muted: false, sensitivity: 0.5 };
+export const FOV_MIN = 70;
+export const FOV_MAX = 110;
+export const DEFAULT_SETTINGS: Settings = { volume: 0.7, muted: false, sensitivity: 0.5, fov: 80 };
 
 // Sensitivity slider maps linearly onto this radians-per-pixel range; the
 // default slider (0.5) lands close to the old fixed 0.0022 feel.
@@ -33,6 +36,7 @@ export function clampSettings(partial: Partial<Settings>): Settings {
     volume: clamp(partial.volume ?? DEFAULT_SETTINGS.volume, 0, 1),
     muted: partial.muted ?? DEFAULT_SETTINGS.muted,
     sensitivity: clamp(partial.sensitivity ?? DEFAULT_SETTINGS.sensitivity, 0, 1),
+    fov: clamp(partial.fov ?? DEFAULT_SETTINGS.fov, FOV_MIN, FOV_MAX),
   };
 }
 
@@ -72,6 +76,14 @@ export class SettingsStore {
   /** Mouse-look radians per pixel for the current sensitivity slider. */
   get sensitivityRadians(): number {
     return sensitivityRadians(this.s.sensitivity);
+  }
+
+  get fov(): number {
+    return this.s.fov;
+  }
+  set fov(v: number) {
+    this.s.fov = clamp(v, FOV_MIN, FOV_MAX);
+    this.save();
   }
 
   private save(): void {

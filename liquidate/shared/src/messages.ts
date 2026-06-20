@@ -107,6 +107,7 @@ export interface StartMessage {
   mode: MatchMode;
   opponentId: PlayerId; // 1v1: the other player; FFA: '' (use `players`)
   players: PlayerId[]; // all player ids in the match (self + others)
+  names: Record<PlayerId, string>; // display name per id (handle, or "BOT n")
   selfSpawnIndex: number;
   map: GameMap; // the map this match is played on (may differ from init's default)
   stake: number; // each player's demo stake; pot = 2 * stake (FFA is free: 0)

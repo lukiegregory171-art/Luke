@@ -25,7 +25,7 @@ import { QUALITY_LEVELS, type QualityLevel } from './quality';
 import { SettingsStore } from './settings';
 import { Input } from './input';
 import { Weapon } from './weapon';
-import { Hud } from './hud';
+import { Hud, scoreboardHTML } from './hud';
 import { Sfx } from './audio';
 import { Net } from './net';
 import { Opponents } from './opponents';
@@ -69,6 +69,7 @@ const lobby = new Lobby();
 // Player preferences (P6): audio volume/mute + mouse sensitivity, persisted.
 const settings = new SettingsStore();
 input.sensitivity = settings.sensitivityRadians;
+world.setFov(settings.fov);
 sfx.setVolume(settings.volume);
 sfx.setMuted(settings.muted);
 
@@ -187,18 +188,32 @@ function showOver(result: MatchResult): void {
   mode = null;
   match = null;
   hud.show(false);
+  hud.showScoreboard(null);
   sfx.stopAmbient();
   resumeHint.classList.add('hidden');
   window.__liq!.net = result.net;
   const title = document.getElementById('over-title') as HTMLElement;
   const detail = document.getElementById('over-detail') as HTMLElement;
-  title.textContent = result.win ? 'VICTORY' : 'DEFEAT';
-  title.className = 'small ' + (result.win ? 'win' : 'lose');
-  const sign = result.net >= 0 ? '+' : '−';
-  const econ = result.oppLeft
-    ? 'Opponent left — match forfeited to you. '
-    : `Pot ${result.pot} · rake ${result.rake}. `;
-  detail.textContent = `${econ}You ${result.net >= 0 ? 'won' : 'lost'} ${sign}${Math.abs(result.net)} DEMO.`;
+  const boardEl = document.getElementById('over-board') as HTMLElement;
+
+  if (result.mode === 'ffa') {
+    // FFA: placement out of the field; free, so no economy line.
+    const win = result.place === 1;
+    title.textContent = win ? 'VICTORY' : `#${result.place} / ${result.board.length}`;
+    title.className = 'small ' + (win ? 'win' : 'lose');
+    detail.textContent = win
+      ? `You topped the lobby with ${result.selfScore} frags.`
+      : `You placed #${result.place} with ${result.selfScore} frags. Free-for-all — no stake.`;
+  } else {
+    title.textContent = result.win ? 'VICTORY' : 'DEFEAT';
+    title.className = 'small ' + (result.win ? 'win' : 'lose');
+    const sign = result.net >= 0 ? '+' : '−';
+    const econ = result.oppLeft
+      ? 'Opponent left — match forfeited to you. '
+      : `Pot ${result.pot} · rake ${result.rake}. `;
+    detail.textContent = `${econ}You ${result.net >= 0 ? 'won' : 'lost'} ${sign}${Math.abs(result.net)} DEMO.`;
+  }
+  boardEl.innerHTML = scoreboardHTML(result.board, 'FINAL');
   showCard(cardOver);
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -212,6 +227,7 @@ function backToLobby(): void {
   shake.reset();
   sfx.stopAmbient();
   hud.show(false);
+  hud.showScoreboard(null);
   showCard(cardMenu);
 }
 
@@ -233,9 +249,11 @@ qualitySel.addEventListener('change', () => {
 const volEl = document.getElementById('opt-volume') as HTMLInputElement;
 const muteEl = document.getElementById('opt-mute') as HTMLInputElement;
 const sensEl = document.getElementById('opt-sens') as HTMLInputElement;
+const fovEl = document.getElementById('opt-fov') as HTMLInputElement;
 volEl.value = String(Math.round(settings.volume * 100));
 muteEl.checked = settings.muted;
 sensEl.value = String(Math.round(settings.sensitivity * 100));
+fovEl.value = String(Math.round(settings.fov));
 volEl.addEventListener('input', () => {
   settings.volume = Number(volEl.value) / 100;
   sfx.setVolume(settings.volume);
@@ -247,6 +265,10 @@ muteEl.addEventListener('change', () => {
 sensEl.addEventListener('input', () => {
   settings.sensitivity = Number(sensEl.value) / 100;
   input.sensitivity = settings.sensitivityRadians;
+});
+fovEl.addEventListener('input', () => {
+  settings.fov = Number(fovEl.value);
+  world.setFov(settings.fov);
 });
 
 // UI click feedback: resume audio on the first gesture, then click on buttons.

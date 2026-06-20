@@ -37,6 +37,7 @@
       <div id="banner"></div>
       <div id="dmgdir"><div id="dmgdir-arrow"></div></div>
       <div id="killfeed"></div>
+      <div id="scoreboard" class="hidden"></div>
 
       <div class="hud-top">
         <span id="score">0&nbsp;&nbsp;YOU&nbsp;·&nbsp;OPP&nbsp;&nbsp;0</span>
@@ -122,6 +123,9 @@
           <label class="opt"
             >SENSITIVITY <input id="opt-sens" type="range" min="0" max="100" value="50"
           /></label>
+          <label class="opt"
+            >FOV <input id="opt-fov" type="range" min="70" max="110" value="80"
+          /></label>
         </div>
 
         <div class="btn-row">
@@ -146,6 +150,7 @@
       <div class="overlay-card hidden" id="card-over">
         <h1 class="small" id="over-title">MATCH OVER</h1>
         <p class="sub" id="over-detail"></p>
+        <div id="over-board" class="over-board"></div>
         <button id="play-again">BACK TO LOBBY</button>
       </div>
     </div>

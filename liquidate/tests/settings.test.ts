@@ -37,7 +37,12 @@ describe('settings helpers (P6)', () => {
   });
 
   it('keeps valid values untouched', () => {
-    const c = clampSettings({ volume: 0.3, sensitivity: 0.8, muted: false });
-    expect(c).toEqual({ volume: 0.3, sensitivity: 0.8, muted: false });
+    const c = clampSettings({ volume: 0.3, sensitivity: 0.8, muted: false, fov: 95 });
+    expect(c).toEqual({ volume: 0.3, sensitivity: 0.8, muted: false, fov: 95 });
+  });
+
+  it('clamps FOV into range', () => {
+    expect(clampSettings({ fov: 999 }).fov).toBe(110);
+    expect(clampSettings({ fov: 10 }).fov).toBe(70);
   });
 });

@@ -18,20 +18,23 @@ vertical slice first, then expanded data-driven.
 
 **Roadmap (build → test → STOP each milestone):**
 
-- **M0 — Scaffold.** Met by this monorepo (workspaces `shared`/`server`/
-  `client`, tooling, WebSocket, passing vitest, self-documenting docs).
-- **M1 — Authoritative core.** Foundation in place (prediction/reconciliation,
-  interpolation, server hitscan + occlusion, kills/respawn/winner, forfeit;
-  integration match test green). Expands to 1v1 **and FFA up to ~6**.
-- **M2 — Stylized pass.** Apply `ARTBIBLE.md` exactly: low-poly flat/toon
-  shading, the locked palette, the **UnrealBloom signature**, low-poly CC0
-  character + viewmodel, loading screen. (The current P0–P7 look is modern PBR;
-  M2 re-skins it to the art bible. **144fps @1080p** is the perf target.)
-- **M3 — Feel + slice content.** Arcade feel + juice, **3 weapons** (assault /
-  SMG / sniper), **2 maps**, bots filling lobbies, FFA + 1v1.
-- **M4 — Menu + demo economy + settings + audio + deploy** → shippable slice.
+- **M0 — Scaffold.** ✅ Monorepo (workspaces `shared`/`server`/`client`),
+  tooling, WebSocket, passing vitest, self-documenting docs.
+- **M1 — Authoritative core.** ✅ Prediction/reconciliation, interpolation,
+  server hitscan + occlusion, kills/respawn/winner, forfeit; integration green.
+- **M2 — Stylized pass.** ✅ `ARTBIBLE.md` look: flat/toon, locked palette, the
+  **UnrealBloom signature**, procedural low-poly character + viewmodel, loading
+  screen. (144fps @1080p target; CC0 art is a drop-in via the P1 AssetManager.)
+- **M3 — Feel + slice content.** ✅ Arcade feel + juice, **3 data-driven
+  weapons** (assault/SMG/sniper), 3 maps, **server bots fill lobbies**, **FFA
+  (up to 6) + 1v1**.
+- **M4 — Menu + demo economy + settings + audio + scoreboard + deploy.** ✅
+  Lobby (sign-in/stake/deposit/withdraw/skins/mode buttons), demo stake→pot→rake
+  economy, settings (volume/mute/sensitivity/FOV/graphics), synth audio, live
+  (Tab) + end-of-match scoreboard, Docker/Render deploy. **Phase A slice done.**
 
-Then expand per `MASTER_BUILD.md` "later", one data-driven feature at a time.
+Then expand per `MASTER_BUILD.md` "later" (Phase B/C), one data-driven feature
+at a time.
 
 ## Hard rules (do not violate)
 
