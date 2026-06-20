@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RIFLE, aimAngles, hitscan, hurtboxes, sampleHistory, sub, v3 } from '@liquidate/shared';
+import { ASSAULT, aimAngles, hitscan, hurtboxes, sampleHistory, sub, v3 } from '@liquidate/shared';
 
 describe('sampleHistory', () => {
   const history = [
@@ -43,7 +43,7 @@ describe('favor-the-shooter rewind', () => {
 
   function shoot(feetX: number) {
     const dir = aimDir(aimAtPast.yaw, aimAtPast.pitch);
-    return hitscan(eye, dir, RIFLE.range, hurtboxes(v3(feetX, 0, 10)), []);
+    return hitscan(eye, dir, ASSAULT.range, hurtboxes(v3(feetX, 0, 10)), []);
   }
 
   it('hits the rewound position but misses the present one', () => {

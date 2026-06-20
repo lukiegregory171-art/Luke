@@ -28,6 +28,7 @@ import {
   TICK_DT,
   WEAPONS,
   WEAPON_SWITCH_TIME,
+  freshMagazines,
   aimDirection,
   clamp,
   clampDt,
@@ -81,7 +82,7 @@ interface PlayerSim {
 }
 
 function fullAmmo(): Record<WeaponId, number> {
-  return { rifle: WEAPONS.rifle.magazine, shotgun: WEAPONS.shotgun.magazine };
+  return freshMagazines();
 }
 
 export class Room {

@@ -187,6 +187,41 @@ body {
   margin-top: -1px;
 }
 
+/* Floating damage numbers (gold body / red headshot) */
+#dmgnums {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.dmgnum {
+  position: absolute;
+  transform: translate(-50%, 0);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--sol-gold, #e8b84b);
+  text-shadow: 0 0 8px rgba(232, 184, 75, 0.6);
+  animation: dmgfloat 0.72s ease-out forwards;
+}
+.dmgnum.head {
+  font-size: 1.7rem;
+  color: var(--danger);
+  text-shadow: 0 0 10px rgba(255, 59, 71, 0.7);
+}
+@keyframes dmgfloat {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -34px) scale(1);
+  }
+}
+
 #banner {
   position: absolute;
   top: 28%;

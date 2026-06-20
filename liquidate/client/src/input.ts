@@ -67,8 +67,9 @@ export class Input {
     if (!fresh) return; // ignore auto-repeat for edge-triggered actions
     if (e.code === 'KeyR') this.onReload();
     else if (e.code === 'Space') this.dashQueued = true;
-    else if (e.code === 'Digit1') this.onSwitch('rifle');
-    else if (e.code === 'Digit2') this.onSwitch('shotgun');
+    else if (e.code === 'Digit1') this.onSwitch('assault');
+    else if (e.code === 'Digit2') this.onSwitch('smg');
+    else if (e.code === 'Digit3') this.onSwitch('sniper');
   };
 
   private handleKeyUp = (e: KeyboardEvent): void => {

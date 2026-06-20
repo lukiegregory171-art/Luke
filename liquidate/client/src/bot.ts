@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import {
   EYE_HEIGHT,
   MAX_HEALTH,
-  RIFLE,
+  ASSAULT,
   aimAngles,
   clamp,
   hurtboxes,
@@ -46,7 +46,7 @@ export class Bot {
   passive = false;
 
   private readonly character: Character;
-  private ammo = RIFLE.magazine;
+  private ammo = ASSAULT.magazine;
   private fireCd = 0;
   private reloadTimer = 0;
   private strafe = 1;
@@ -97,7 +97,7 @@ export class Bot {
   respawn(at: Vec3): void {
     this.move = makeMoveState(at);
     this.health = MAX_HEALTH;
-    this.ammo = RIFLE.magazine;
+    this.ammo = ASSAULT.magazine;
     this.fireCd = 0;
     this.reloadTimer = 0;
     this.alive = true;
@@ -131,7 +131,7 @@ export class Bot {
     if (this.fireCd > 0) this.fireCd = Math.max(0, this.fireCd - dt);
     if (this.reloadTimer > 0) {
       this.reloadTimer -= dt;
-      if (this.reloadTimer <= 0) this.ammo = RIFLE.magazine;
+      if (this.reloadTimer <= 0) this.ammo = ASSAULT.magazine;
     }
 
     const toPlayer = {
@@ -157,12 +157,12 @@ export class Bot {
     // Fire when aimed, in range, with line of sight.
     const aimErr = Math.abs(angleDiff(this.yaw, want.yaw)) + Math.abs(this.pitch - want.pitch);
     let fire = false;
-    if (hasLos && dist <= RIFLE.range && aimErr < 0.12 && this.reloadTimer <= 0) {
+    if (hasLos && dist <= ASSAULT.range && aimErr < 0.12 && this.reloadTimer <= 0) {
       if (this.ammo <= 0) {
-        this.reloadTimer = RIFLE.reloadTime;
+        this.reloadTimer = ASSAULT.reloadTime;
       } else if (this.fireCd <= 0) {
         this.ammo--;
-        this.fireCd = RIFLE.fireInterval;
+        this.fireCd = ASSAULT.fireInterval;
         // Apply jitter to this shot's aim.
         this.yaw += (Math.random() * 2 - 1) * AIM_JITTER;
         this.pitch += (Math.random() * 2 - 1) * AIM_JITTER;

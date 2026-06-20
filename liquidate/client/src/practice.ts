@@ -6,12 +6,14 @@
  */
 
 import {
+  ASSAULT,
   DEFAULT_WEAPON,
   EYE_HEIGHT,
   MAX_HEALTH,
   WEAPONS,
   WEAPON_SWITCH_TIME,
   aimDirection,
+  freshMagazines,
   forwardFromYaw,
   hitscan,
   hurtboxes,
@@ -36,7 +38,7 @@ import { Bot } from './bot';
 
 const STEP = 1 / 60;
 const RESPAWN = 1.5;
-const SLOT: Record<WeaponId, number> = { rifle: 1, shotgun: 2 };
+const SLOT: Record<WeaponId, number> = { assault: 1, smg: 2, sniper: 3 };
 
 export class Practice {
   readonly bot: Bot;
@@ -46,10 +48,7 @@ export class Practice {
   private alive = true;
   private respawnTimer = 0;
   private weapon: WeaponId = DEFAULT_WEAPON;
-  private ammo: Record<WeaponId, number> = {
-    rifle: WEAPONS.rifle.magazine,
-    shotgun: WEAPONS.shotgun.magazine,
-  };
+  private ammo: Record<WeaponId, number> = freshMagazines();
   private reloading = false;
   private reloadTimer = 0;
   private fireCooldown = 0;
@@ -166,6 +165,7 @@ export class Practice {
     if (damage > 0 && this.bot.alive) {
       this.hud.hit(headshot);
       this.sfx.hit(headshot);
+      this.hud.damageNumber(Math.round(damage), headshot);
       const b = this.bot.feet;
       this.impacts.spawn({ x: b.x, y: b.y + 1.1, z: b.z }, 'flesh');
       if (this.bot.damage(Math.round(damage), RESPAWN)) {
@@ -185,14 +185,12 @@ export class Practice {
     const hit = hitscan(
       this.bot.eye,
       this.bot.aimDir(),
-      WEAPONS.rifle.range,
+      ASSAULT.range,
       this.playerBox(),
       this.map.obstacles,
     );
     if (!hit) return;
-    const dmg = Math.round(
-      WEAPONS.rifle.damage * (hit.headshot ? WEAPONS.rifle.headshotMultiplier : 1),
-    );
+    const dmg = Math.round(ASSAULT.damage * (hit.headshot ? ASSAULT.headshotMultiplier : 1));
     this.health -= dmg;
     this.hud.setHealth(Math.max(0, this.health));
     this.hud.damageFlash();
@@ -244,7 +242,7 @@ export class Practice {
     this.input.yaw = this.map.spawns[0].yaw;
     this.input.pitch = 0;
     this.health = MAX_HEALTH;
-    this.ammo = { rifle: WEAPONS.rifle.magazine, shotgun: WEAPONS.shotgun.magazine };
+    this.ammo = freshMagazines();
     this.weapon = DEFAULT_WEAPON;
     this.reloading = false;
     this.fireCooldown = 0;

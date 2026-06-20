@@ -13,7 +13,7 @@
  */
 
 import * as THREE from 'three';
-import { clamp, MOVE_SPEED, type Vec3 } from '@liquidate/shared';
+import { clamp, MOVE_SPEED, type Vec3, type WeaponId } from '@liquidate/shared';
 import { Pool } from './pool';
 
 /** Per-frame view motion that drives bob (speed) and sway (look delta). */
@@ -165,8 +165,8 @@ export class Weapon {
   }
 
   /** Switch the viewmodel's weapon (affects muzzle flash size / recoil feel). */
-  setWeapon(id: 'rifle' | 'shotgun'): void {
-    this.flashScale = id === 'shotgun' ? 1.7 : 1;
+  setWeapon(id: WeaponId): void {
+    this.flashScale = id === 'sniper' ? 1.8 : id === 'smg' ? 0.8 : 1;
   }
 
   /**

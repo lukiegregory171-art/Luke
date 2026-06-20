@@ -94,8 +94,14 @@ export class Sfx {
   }
 
   shoot(weapon: WeaponId): void {
-    if (weapon === 'shotgun') this.burst(0.18, 0.35, 700);
-    else this.burst(0.07, 0.22, 1400);
+    if (weapon === 'sniper') {
+      this.burst(0.22, 0.4, 600); // deep crack
+      this.tone(180, 0.18, 'sawtooth', 0.12, 70);
+    } else if (weapon === 'smg') {
+      this.burst(0.05, 0.16, 1700); // fast, high, light
+    } else {
+      this.burst(0.07, 0.22, 1300); // assault — punchy mid
+    }
   }
 
   hit(headshot: boolean): void {

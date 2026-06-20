@@ -62,7 +62,7 @@ export interface MatchCallbacks {
   onSnapshot?: () => void;
 }
 
-const SLOT: Record<WeaponId, number> = { rifle: 1, shotgun: 2 };
+const SLOT: Record<WeaponId, number> = { assault: 1, smg: 2, sniper: 3 };
 
 export class Match {
   private selfId = '';
@@ -75,7 +75,7 @@ export class Match {
   private acc = 0;
 
   private selfAlive = true;
-  private selfAmmo = WEAPONS.rifle.magazine;
+  private selfAmmo = WEAPONS[DEFAULT_WEAPON].magazine;
   private selfReloading = false;
   private selfWeapon: WeaponId = DEFAULT_WEAPON;
   private prevHealth = MAX_HEALTH;
@@ -168,9 +168,10 @@ export class Match {
     this.syncCamera();
     this.hud.setScores(0, 0);
     this.hud.setHealth(MAX_HEALTH);
-    this.hud.setAmmo(WEAPONS.rifle.magazine, WEAPONS.rifle.magazine);
-    this.hud.setWeapon(WEAPONS.rifle.name, SLOT.rifle);
-    this.weapon.setWeapon('rifle');
+    const w0 = WEAPONS[DEFAULT_WEAPON];
+    this.hud.setAmmo(w0.magazine, w0.magazine);
+    this.hud.setWeapon(w0.name, SLOT[DEFAULT_WEAPON]);
+    this.weapon.setWeapon(DEFAULT_WEAPON);
     this.callbacks.onPlaying();
   }
 
@@ -339,7 +340,10 @@ export class Match {
     if (shooter === this.selfId) {
       this.hud.hit(headshot);
       this.sfx.hit(headshot);
-      // Blood spark at the opponent's torso (cosmetic; the hit is server-decided).
+      // Floating damage number (computed from weapon data; the hit itself is
+      // server-decided). Blood spark at the opponent's torso.
+      const w = WEAPONS[this.selfWeapon];
+      this.hud.damageNumber(Math.round(w.damage * (headshot ? w.headshotMultiplier : 1)), headshot);
       this.impacts.spawn({ x: this.oppPos.x, y: this.oppPos.y + 1.1, z: this.oppPos.z }, 'flesh');
     }
     if (target === this.selfId) {

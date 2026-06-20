@@ -27,14 +27,14 @@ export const RECONNECT_GRACE_MS = 10000;
 export const PLAYER_RADIUS = 0.4; // horizontal collision radius (units = metres)
 export const PLAYER_HEIGHT = 1.8; // full standing height
 export const EYE_HEIGHT = 1.6; // camera / ray origin height above feet
-export const MOVE_SPEED = 6.0; // max ground move speed, units/sec
+export const MOVE_SPEED = 8.5; // max ground move speed, units/sec (arcade feel, M3)
 export const MAX_HEALTH = 100;
 
 // --- Movement feel (velocity-based; shared by prediction + authority) -------
-export const GROUND_ACCEL = 14; // acceleration toward the wished direction
+export const GROUND_ACCEL = 16; // acceleration toward the wished direction
 export const GROUND_FRICTION = 10; // deceleration when not accelerating
 export const STOP_SPEED = 2.0; // friction floor so you stop crisply
-export const DASH_SPEED = 15; // burst speed of a dash
+export const DASH_SPEED = 20; // burst speed of a dash
 export const DASH_COOLDOWN = 1.6; // seconds between dashes
 export const WEAPON_SWITCH_TIME = 0.35; // brief delay after swapping weapons
 
@@ -68,8 +68,8 @@ export function rakeOf(pot: number): number {
   return bpsOf(pot, RAKE_BPS);
 }
 
-// --- Weapons ---------------------------------------------------------------
-export type WeaponId = 'rifle' | 'shotgun';
+// --- Weapons (data-driven; add a weapon = add data here) -------------------
+export type WeaponId = 'assault' | 'smg' | 'sniper';
 
 export interface WeaponConfig {
   id: WeaponId;
@@ -84,35 +84,62 @@ export interface WeaponConfig {
   spread: number; // max cone half-angle in radians (0 = pinpoint)
 }
 
-export const RIFLE: WeaponConfig = {
-  id: 'rifle',
-  name: 'Rifle',
-  damage: 34,
+/** Balanced all-rounder; the default. ~4 body / 2 head to kill. */
+export const ASSAULT: WeaponConfig = {
+  id: 'assault',
+  name: 'Assault',
+  damage: 25,
   headshotMultiplier: 2.0,
-  fireInterval: 0.12,
+  fireInterval: 0.1,
   magazine: 30,
   reloadTime: 1.8,
   range: 200,
   pellets: 1,
+  spread: 0.012,
+};
+
+/** Fast, spray-y, short range; rewards closing distance. */
+export const SMG: WeaponConfig = {
+  id: 'smg',
+  name: 'SMG',
+  damage: 16,
+  headshotMultiplier: 1.8,
+  fireInterval: 0.07,
+  magazine: 35,
+  reloadTime: 1.5,
+  range: 90,
+  pellets: 1,
+  spread: 0.03,
+};
+
+/** Slow, pinpoint, lethal; 1 headshot / 2 body. */
+export const SNIPER: WeaponConfig = {
+  id: 'sniper',
+  name: 'Sniper',
+  damage: 80,
+  headshotMultiplier: 2.0,
+  fireInterval: 0.95,
+  magazine: 5,
+  reloadTime: 2.6,
+  range: 300,
+  pellets: 1,
   spread: 0,
 };
 
-export const SHOTGUN: WeaponConfig = {
-  id: 'shotgun',
-  name: 'Scattergun',
-  damage: 11,
-  headshotMultiplier: 1.5,
-  fireInterval: 0.7,
-  magazine: 7,
-  reloadTime: 2.4,
-  range: 45,
-  pellets: 8,
-  spread: 0.08,
-};
+/** Slot order (HUD keys 1/2/3). */
+export const WEAPON_IDS: WeaponId[] = ['assault', 'smg', 'sniper'];
 
 export const WEAPONS: Record<WeaponId, WeaponConfig> = {
-  rifle: RIFLE,
-  shotgun: SHOTGUN,
+  assault: ASSAULT,
+  smg: SMG,
+  sniper: SNIPER,
 };
 
-export const DEFAULT_WEAPON: WeaponId = 'rifle';
+export const DEFAULT_WEAPON: WeaponId = 'assault';
+
+/** A fresh full-magazine map (data-driven over WEAPON_IDS). */
+export function freshMagazines(): Record<WeaponId, number> {
+  const out = {} as Record<WeaponId, number>;
+  for (const id of WEAPON_IDS) out[id] = WEAPONS[id].magazine;
+  return out;
+}

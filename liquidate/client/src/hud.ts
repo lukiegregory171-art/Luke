@@ -23,6 +23,7 @@ export class Hud {
   private readonly dmgArrow = document.getElementById('dmgdir-arrow') as HTMLElement;
   private readonly crosshair = document.getElementById('crosshair') as HTMLElement;
   private readonly lowhp = document.getElementById('lowhp') as HTMLElement;
+  private readonly dmgnums = document.getElementById('dmgnums') as HTMLElement;
 
   private hitTimer?: ReturnType<typeof setTimeout>;
   private bannerTimer?: ReturnType<typeof setTimeout>;
@@ -60,6 +61,18 @@ export class Hud {
     this.healthFill.classList.toggle('low', low);
     // Pulsing red edge vignette while critical (cleared when dead/healed).
     this.lowhp.classList.toggle('show', low && hp > 0);
+  }
+
+  /** Floating damage number near the crosshair (gold body / red headshot). */
+  damageNumber(amount: number, headshot: boolean): void {
+    const el = document.createElement('div');
+    el.className = 'dmgnum' + (headshot ? ' head' : '');
+    el.textContent = String(Math.round(amount));
+    const dx = (Math.random() * 2 - 1) * 38;
+    el.style.left = `calc(50% + ${dx}px)`;
+    el.style.top = `calc(50% - 26px)`;
+    this.dmgnums.appendChild(el);
+    setTimeout(() => el.remove(), 720);
   }
 
   /** Brief crosshair expansion on firing (recoil read). */

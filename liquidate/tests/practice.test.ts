@@ -6,7 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { RIFLE, type GameMap } from '@liquidate/shared';
+import { ASSAULT, type GameMap } from '@liquidate/shared';
 import { Practice } from '../client/src/practice';
 import { Impacts } from '../client/src/impacts';
 import { Shake } from '../client/src/shake';
@@ -61,6 +61,7 @@ function harness() {
     damageFlash: vi.fn(),
     damageFrom: vi.fn(),
     crosshairKick: vi.fn(),
+    damageNumber: vi.fn(),
   } as unknown as Hud;
   const sfx = {
     shoot: vi.fn(),
@@ -91,7 +92,7 @@ describe('Practice (offline vs bot)', () => {
     expect(gun.fire).toHaveBeenCalledTimes(1);
     expect(hud.hit).toHaveBeenCalled();
     expect(practice.bot.health).toBeLessThan(before);
-    expect(hud.setAmmo).toHaveBeenLastCalledWith(RIFLE.magazine - 1, RIFLE.magazine);
+    expect(hud.setAmmo).toHaveBeenLastCalledWith(ASSAULT.magazine - 1, ASSAULT.magazine);
   });
 
   it('empties the magazine then auto-reloads to full', () => {
@@ -100,13 +101,13 @@ describe('Practice (offline vs bot)', () => {
     // Keep the bot alive so firing continues (aim just over its head).
     input.pitch = 0.6;
 
-    for (let i = 0; i < RIFLE.magazine; i++) practice.update(RIFLE.fireInterval + 0.001);
-    expect(hud.setAmmo).toHaveBeenLastCalledWith(0, RIFLE.magazine);
+    for (let i = 0; i < ASSAULT.magazine; i++) practice.update(ASSAULT.fireInterval + 0.001);
+    expect(hud.setAmmo).toHaveBeenLastCalledWith(0, ASSAULT.magazine);
     expect(hud.setReloading).toHaveBeenLastCalledWith(true);
 
     input.firing = false;
-    practice.update(RIFLE.reloadTime + 0.01);
+    practice.update(ASSAULT.reloadTime + 0.01);
     expect(hud.setReloading).toHaveBeenLastCalledWith(false);
-    expect(hud.setAmmo).toHaveBeenLastCalledWith(RIFLE.magazine, RIFLE.magazine);
+    expect(hud.setAmmo).toHaveBeenLastCalledWith(ASSAULT.magazine, ASSAULT.magazine);
   });
 });

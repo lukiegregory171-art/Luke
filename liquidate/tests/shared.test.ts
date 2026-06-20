@@ -69,7 +69,7 @@ describe('movement + collision', () => {
       1 / 60,
       DEFAULT_MAP,
     );
-    expect(Math.hypot(dashed.vel.x, dashed.vel.z)).toBeGreaterThan(6); // > MOVE_SPEED
+    expect(Math.hypot(dashed.vel.x, dashed.vel.z)).toBeGreaterThan(8.5); // > MOVE_SPEED
     expect(dashed.dashCd).toBeGreaterThan(0); // dash went on cooldown
   });
 

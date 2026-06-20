@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HEAD_SPHERE,
-  RIFLE,
+  ASSAULT,
   hitscan,
   hurtboxes,
   normalize,
@@ -57,14 +57,14 @@ describe('hitscan (occlusion + headshots)', () => {
 
   it('registers a body hit on a clear shot', () => {
     const dir = normalize(v3(0, target.body.center.y, target.body.center.z));
-    const hit = hitscan(origin, dir, RIFLE.range, target, []);
+    const hit = hitscan(origin, dir, ASSAULT.range, target, []);
     expect(hit).not.toBeNull();
     expect(hit?.headshot).toBe(false);
   });
 
   it('registers a headshot when aimed at the head', () => {
     const dir = normalize(v3(0, HEAD_SPHERE.centerY, -10));
-    const hit = hitscan(origin, dir, RIFLE.range, target, []);
+    const hit = hitscan(origin, dir, ASSAULT.range, target, []);
     expect(hit).not.toBeNull();
     expect(hit?.headshot).toBe(true);
   });
@@ -72,14 +72,14 @@ describe('hitscan (occlusion + headshots)', () => {
   it('is blocked by an obstacle between shooter and target (cover works)', () => {
     const wall: AABB = { min: v3(-2, 0, -6), max: v3(2, 3, -5) };
     const dir = normalize(v3(0, target.body.center.y, target.body.center.z));
-    const hit = hitscan(origin, dir, RIFLE.range, target, [wall]);
+    const hit = hitscan(origin, dir, ASSAULT.range, target, [wall]);
     expect(hit).toBeNull();
   });
 
   it('still hits when the obstacle is behind the target', () => {
     const wallBehind: AABB = { min: v3(-2, 0, -16), max: v3(2, 3, -15) };
     const dir = normalize(v3(0, target.body.center.y, target.body.center.z));
-    const hit = hitscan(origin, dir, RIFLE.range, target, [wallBehind]);
+    const hit = hitscan(origin, dir, ASSAULT.range, target, [wallBehind]);
     expect(hit).not.toBeNull();
   });
 });
