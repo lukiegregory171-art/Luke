@@ -9,6 +9,13 @@ position, hits, kills, ammo, score, and currency.
 > clearly labelled **DEMO**. There is no custody of funds, no fiat, no real-SOL
 > escrow, and no mainnet wagering anywhere in this codebase. See `CLAUDE.md`.
 
+**Project docs:** the full product brief is in `MASTER_BUILD.md`, the working
+conventions/roadmap in `CLAUDE.md`, and the **locked visual direction** (palette,
+materials, lighting, the UnrealBloom signature) in `ARTBIBLE.md`. The bar is a
+**Krunker-tier stylized** look on Three.js — a lean online vertical slice first
+(M0 scaffold → M1 authoritative core → M2 stylized pass → M3 content → M4 ship),
+then data-driven expansion.
+
 ## Stack
 
 - **Server:** Node.js (LTS) + TypeScript, `ws` for WebSockets, plain HTTP for

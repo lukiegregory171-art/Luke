@@ -8,6 +8,31 @@ LIQUIDATE is a browser-based **1v1 first-person shooter** with a crypto-arena
 theme and a **play-money** "stake → winner sweeps the pot → house rake" economy
 layer. Two real players duel; the server decides everything.
 
+## Master brief & locked art direction
+
+The full product brief lives in **`MASTER_BUILD.md`**; the **locked** visual look
+lives in **`ARTBIBLE.md`** (the art bible wins any look dispute). Read both before
+visual or content work. The bar is **Krunker-tier** stylized look/feel on a
+Three.js + Node stack (not realistic Unity/Unreal), shipped as a lean online
+vertical slice first, then expanded data-driven.
+
+**Roadmap (build → test → STOP each milestone):**
+
+- **M0 — Scaffold.** Met by this monorepo (workspaces `shared`/`server`/
+  `client`, tooling, WebSocket, passing vitest, self-documenting docs).
+- **M1 — Authoritative core.** Foundation in place (prediction/reconciliation,
+  interpolation, server hitscan + occlusion, kills/respawn/winner, forfeit;
+  integration match test green). Expands to 1v1 **and FFA up to ~6**.
+- **M2 — Stylized pass.** Apply `ARTBIBLE.md` exactly: low-poly flat/toon
+  shading, the locked palette, the **UnrealBloom signature**, low-poly CC0
+  character + viewmodel, loading screen. (The current P0–P7 look is modern PBR;
+  M2 re-skins it to the art bible. **144fps @1080p** is the perf target.)
+- **M3 — Feel + slice content.** Arcade feel + juice, **3 weapons** (assault /
+  SMG / sniper), **2 maps**, bots filling lobbies, FFA + 1v1.
+- **M4 — Menu + demo economy + settings + audio + deploy** → shippable slice.
+
+Then expand per `MASTER_BUILD.md` "later", one data-driven feature at a time.
+
 ## Hard rules (do not violate)
 
 1. **No real money, ever.** The economy is play-money integers only. No
