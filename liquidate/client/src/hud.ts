@@ -3,7 +3,7 @@
  * hitmarker, a damage flash, and a transient banner.
  */
 
-import { MAX_HEALTH } from '@liquidate/shared';
+import { MAX_HEALTH, WEAPONS, WEAPON_IDS, weaponSlot, type WeaponId } from '@liquidate/shared';
 
 export interface ScoreRow {
   name: string;
@@ -55,9 +55,17 @@ export class Hud {
   private readonly lowhp = document.getElementById('lowhp') as HTMLElement;
   private readonly dmgnums = document.getElementById('dmgnums') as HTMLElement;
   private readonly scoreboard = document.getElementById('scoreboard') as HTMLElement;
+  private readonly weprack = document.getElementById('weprack') as HTMLElement;
 
   private hitTimer?: ReturnType<typeof setTimeout>;
   private bannerTimer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    // Build the weapon rack once from the data-driven roster (keys 1..N).
+    this.weprack.innerHTML = WEAPON_IDS.map(
+      (id) => `<div class="wr" data-id="${id}"><b>${weaponSlot(id)}</b> ${WEAPONS[id].name}</div>`,
+    ).join('');
+  }
 
   show(visible: boolean): void {
     this.root.classList.toggle('hidden', !visible);
@@ -154,8 +162,12 @@ export class Hud {
     this.bannerTimer = setTimeout(() => (this.bannerEl.className = ''), 1400);
   }
 
-  setWeapon(name: string, slot: number): void {
-    this.weaponEl.innerHTML = `${name.toUpperCase()} <span class="wkey">[${slot}]</span>`;
+  setWeapon(id: WeaponId): void {
+    const w = WEAPONS[id];
+    this.weaponEl.innerHTML = `${w.name.toUpperCase()} <span class="wkey">[${weaponSlot(id)}]</span>`;
+    for (const row of Array.from(this.weprack.children) as HTMLElement[]) {
+      row.classList.toggle('on', row.dataset.id === id);
+    }
   }
 
   addKill(killer: string, victim: string, headshot: boolean): void {

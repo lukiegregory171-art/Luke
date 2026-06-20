@@ -3,7 +3,7 @@
  * pressed-keys set that the game turns into movement input each frame.
  */
 
-import { clamp, type WeaponId } from '@liquidate/shared';
+import { clamp, WEAPON_IDS, type WeaponId } from '@liquidate/shared';
 
 const PITCH_LIMIT = 1.5; // ~86 degrees up/down
 const DEFAULT_SENSITIVITY = 0.0022;
@@ -73,9 +73,10 @@ export class Input {
     if (!fresh) return; // ignore auto-repeat for edge-triggered actions
     if (e.code === 'KeyR') this.onReload();
     else if (e.code === 'Space') this.dashQueued = true;
-    else if (e.code === 'Digit1') this.onSwitch('assault');
-    else if (e.code === 'Digit2') this.onSwitch('smg');
-    else if (e.code === 'Digit3') this.onSwitch('sniper');
+    else if (e.code.startsWith('Digit')) {
+      const id = WEAPON_IDS[Number(e.code.slice(5)) - 1];
+      if (id) this.onSwitch(id);
+    }
   };
 
   private handleKeyUp = (e: KeyboardEvent): void => {

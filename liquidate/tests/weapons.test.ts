@@ -19,10 +19,25 @@ import {
 } from '@liquidate/shared';
 
 describe('weapons (M3, data-driven)', () => {
-  it('exposes exactly the 3-weapon slice, indexed by id', () => {
-    expect(WEAPON_IDS).toEqual(['assault', 'smg', 'sniper']);
+  it('exposes the weapon roster, indexed by id', () => {
+    expect(WEAPON_IDS).toEqual([
+      'assault',
+      'smg',
+      'sniper',
+      'shotgun',
+      'pistol',
+      'lmg',
+      'marksman',
+    ]);
     for (const id of WEAPON_IDS) expect(WEAPONS[id].id).toBe(id);
     expect(DEFAULT_WEAPON).toBe('assault');
+  });
+
+  it('the shotgun is the only multi-pellet weapon (close-range burst)', () => {
+    expect(WEAPONS.shotgun.pellets).toBeGreaterThan(1);
+    for (const id of WEAPON_IDS) {
+      if (id !== 'shotgun') expect(WEAPONS[id].pellets).toBe(1);
+    }
   });
 
   it('every weapon has sane, complete stats', () => {

@@ -851,3 +851,30 @@ button.ghost:hover {
   margin: 0 auto 1.4rem;
   max-width: 340px;
 }
+
+/* --- Weapon rack (data-driven; active highlighted) ------------------------ */
+#weprack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-bottom: 0.5rem;
+}
+#weprack .wr {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: #5d6b78;
+  padding: 1px 6px;
+  border-right: 2px solid transparent;
+}
+#weprack .wr b {
+  color: #44515d;
+  margin-right: 0.3rem;
+}
+#weprack .wr.on {
+  color: var(--text);
+  border-right-color: var(--accent);
+}
+#weprack .wr.on b {
+  color: var(--accent);
+}

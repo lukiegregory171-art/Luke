@@ -9,6 +9,17 @@
 
 import { MOVE_SPEED, type WeaponId } from '@liquidate/shared';
 
+/** Per-weapon shot sound (noise burst + optional low sub for heavy guns). */
+const SHOT: Record<WeaponId, { dur: number; gain: number; freq: number; sub?: number }> = {
+  assault: { dur: 0.07, gain: 0.22, freq: 1300 },
+  smg: { dur: 0.05, gain: 0.16, freq: 1700 },
+  sniper: { dur: 0.22, gain: 0.4, freq: 600, sub: 180 },
+  shotgun: { dur: 0.18, gain: 0.4, freq: 620, sub: 110 },
+  pistol: { dur: 0.06, gain: 0.2, freq: 1500 },
+  lmg: { dur: 0.07, gain: 0.24, freq: 1100 },
+  marksman: { dur: 0.1, gain: 0.3, freq: 900, sub: 220 },
+};
+
 export class Sfx {
   private ctx?: AudioContext;
   private master?: GainNode;
@@ -94,14 +105,9 @@ export class Sfx {
   }
 
   shoot(weapon: WeaponId): void {
-    if (weapon === 'sniper') {
-      this.burst(0.22, 0.4, 600); // deep crack
-      this.tone(180, 0.18, 'sawtooth', 0.12, 70);
-    } else if (weapon === 'smg') {
-      this.burst(0.05, 0.16, 1700); // fast, high, light
-    } else {
-      this.burst(0.07, 0.22, 1300); // assault — punchy mid
-    }
+    const s = SHOT[weapon];
+    this.burst(s.dur, s.gain, s.freq);
+    if (s.sub) this.tone(s.sub, s.dur * 0.8, 'sawtooth', 0.12, s.sub * 0.4);
   }
 
   hit(headshot: boolean): void {

@@ -36,6 +36,17 @@ const ACCENT_DEFAULT = 0x16e0a3;
 const TRACER_BASE = 0xbafff0;
 const WHITE = new THREE.Color(0xffffff);
 
+/** Per-weapon viewmodel feel: muzzle-flash scale + a distinct silhouette. */
+const VIEWMODEL: Record<WeaponId, { flash: number; scale: [number, number, number] }> = {
+  assault: { flash: 1, scale: [1, 1, 1] },
+  smg: { flash: 0.8, scale: [0.85, 0.9, 0.8] },
+  sniper: { flash: 1.8, scale: [1, 1, 1.35] },
+  shotgun: { flash: 1.6, scale: [1.2, 1.05, 0.85] },
+  pistol: { flash: 0.7, scale: [0.75, 0.8, 0.7] },
+  lmg: { flash: 1.2, scale: [1.15, 1.15, 1.1] },
+  marksman: { flash: 1.5, scale: [1, 1, 1.2] },
+};
+
 export class Weapon {
   private readonly group = new THREE.Group();
   private readonly muzzle = new THREE.Object3D();
@@ -164,9 +175,11 @@ export class Weapon {
     return this.muzzle.getWorldPosition(out);
   }
 
-  /** Switch the viewmodel's weapon (affects muzzle flash size / recoil feel). */
+  /** Switch the viewmodel's weapon: muzzle-flash size + a distinct silhouette. */
   setWeapon(id: WeaponId): void {
-    this.flashScale = id === 'sniper' ? 1.8 : id === 'smg' ? 0.8 : 1;
+    const vm = VIEWMODEL[id];
+    this.flashScale = vm.flash;
+    this.group.scale.set(vm.scale[0], vm.scale[1], vm.scale[2]);
   }
 
   /**

@@ -66,7 +66,6 @@ export interface MatchCallbacks {
   onSnapshot?: () => void;
 }
 
-const SLOT: Record<WeaponId, number> = { assault: 1, smg: 2, sniper: 3 };
 
 export class Match {
   private selfId = '';
@@ -179,7 +178,7 @@ export class Match {
     this.hud.setHealth(MAX_HEALTH);
     const w0 = WEAPONS[DEFAULT_WEAPON];
     this.hud.setAmmo(w0.magazine, w0.magazine);
-    this.hud.setWeapon(w0.name, SLOT[DEFAULT_WEAPON]);
+    this.hud.setWeapon(DEFAULT_WEAPON);
     this.weapon.setWeapon(DEFAULT_WEAPON);
     this.callbacks.onPlaying();
   }
@@ -310,7 +309,7 @@ export class Match {
       if (self.weapon !== this.selfWeapon) {
         this.selfWeapon = self.weapon;
         this.weapon.setWeapon(self.weapon);
-        this.hud.setWeapon(WEAPONS[self.weapon].name, SLOT[self.weapon]);
+        this.hud.setWeapon(self.weapon);
       }
       this.hud.setAmmo(self.ammo, WEAPONS[self.weapon].magazine);
       this.hud.setReloading(self.reloading);

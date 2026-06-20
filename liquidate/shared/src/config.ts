@@ -74,7 +74,7 @@ export function rakeOf(pot: number): number {
 }
 
 // --- Weapons (data-driven; add a weapon = add data here) -------------------
-export type WeaponId = 'assault' | 'smg' | 'sniper';
+export type WeaponId = 'assault' | 'smg' | 'sniper' | 'shotgun' | 'pistol' | 'lmg' | 'marksman';
 
 export interface WeaponConfig {
   id: WeaponId;
@@ -132,16 +132,89 @@ export const SNIPER: WeaponConfig = {
   spread: 0,
 };
 
-/** Slot order (HUD keys 1/2/3). */
-export const WEAPON_IDS: WeaponId[] = ['assault', 'smg', 'sniper'];
+/** Close-range burst: 8 pellets, lethal point-blank, useless at range. */
+export const SHOTGUN: WeaponConfig = {
+  id: 'shotgun',
+  name: 'Scattergun',
+  damage: 11,
+  headshotMultiplier: 1.5,
+  fireInterval: 0.75,
+  magazine: 6,
+  reloadTime: 2.4,
+  range: 40,
+  pellets: 8,
+  spread: 0.09,
+};
+
+/** Sidearm: quick, accurate, modest damage; a reliable backup. */
+export const PISTOL: WeaponConfig = {
+  id: 'pistol',
+  name: 'Sidearm',
+  damage: 22,
+  headshotMultiplier: 2.0,
+  fireInterval: 0.18,
+  magazine: 12,
+  reloadTime: 1.2,
+  range: 120,
+  pellets: 1,
+  spread: 0.01,
+};
+
+/** Light machine gun: big mag, suppressive, sprays; slow to reload. */
+export const LMG: WeaponConfig = {
+  id: 'lmg',
+  name: 'LMG',
+  damage: 20,
+  headshotMultiplier: 1.6,
+  fireInterval: 0.08,
+  magazine: 60,
+  reloadTime: 3.0,
+  range: 160,
+  pellets: 1,
+  spread: 0.04,
+};
+
+/** Semi-auto marksman rifle: hits hard at range between assault and sniper. */
+export const MARKSMAN: WeaponConfig = {
+  id: 'marksman',
+  name: 'Marksman',
+  damage: 45,
+  headshotMultiplier: 2.0,
+  fireInterval: 0.35,
+  magazine: 12,
+  reloadTime: 2.0,
+  range: 250,
+  pellets: 1,
+  spread: 0,
+};
+
+/** Slot order (HUD keys 1..N). */
+export const WEAPON_IDS: WeaponId[] = [
+  'assault',
+  'smg',
+  'sniper',
+  'shotgun',
+  'pistol',
+  'lmg',
+  'marksman',
+];
 
 export const WEAPONS: Record<WeaponId, WeaponConfig> = {
   assault: ASSAULT,
   smg: SMG,
   sniper: SNIPER,
+  shotgun: SHOTGUN,
+  pistol: PISTOL,
+  lmg: LMG,
+  marksman: MARKSMAN,
 };
 
 export const DEFAULT_WEAPON: WeaponId = 'assault';
+
+/** 1-based slot (HUD key) for a weapon. */
+export function weaponSlot(id: WeaponId): number {
+  return WEAPON_IDS.indexOf(id) + 1;
+}
 
 /** A fresh full-magazine map (data-driven over WEAPON_IDS). */
 export function freshMagazines(): Record<WeaponId, number> {

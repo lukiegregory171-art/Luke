@@ -38,7 +38,6 @@ import { Bot } from './bot';
 
 const STEP = 1 / 60;
 const RESPAWN = 1.5;
-const SLOT: Record<WeaponId, number> = { assault: 1, smg: 2, sniper: 3 };
 
 export class Practice {
   readonly bot: Bot;
@@ -217,7 +216,7 @@ export class Practice {
 
   private applyWeaponView(): void {
     this.gun.setWeapon(this.weapon);
-    this.hud.setWeapon(WEAPONS[this.weapon].name, SLOT[this.weapon]);
+    this.hud.setWeapon(this.weapon);
     this.hud.setAmmo(this.ammo[this.weapon], WEAPONS[this.weapon].magazine);
   }
 
