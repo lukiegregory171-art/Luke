@@ -119,10 +119,10 @@ export const REFINERY: GameMap = {
   spawns: [
     { pos: { x: -REFINERY_W / 2 + 3, y: 0, z: 0 }, yaw: -Math.PI / 2 }, // -X end, facing +X
     { pos: { x: REFINERY_W / 2 - 3, y: 0, z: 0 }, yaw: Math.PI / 2 }, // +X end, facing -X
-    facing(-13, -13),
-    facing(13, -13),
-    facing(-13, 13),
-    facing(13, 13),
+    facing(-13, -6),
+    facing(13, -6),
+    facing(-13, 6),
+    facing(13, 6),
   ],
 };
 
@@ -165,13 +165,89 @@ export const VAULT: GameMap = {
   ],
 };
 
+/**
+ * "Datacenter" — vertical map: a raised central dais you hop onto, tall server-
+ * rack pillars for cover, and mid-side steps. Crates are jumpable (≤1.4) so you
+ * fight on two levels. Symmetric.
+ */
+export const DATACENTER: GameMap = {
+  id: 'datacenter',
+  name: 'Datacenter',
+  width: 36,
+  depth: 40,
+  wallHeight: 5,
+  obstacles: [
+    box(0, 0, 7, 7, 1.2), // central dais (jump up for high ground)
+    // Server racks (tall cover; can't be stood on).
+    box(-8, -8, 1.6, 1.6, 2.6),
+    box(8, 8, 1.6, 1.6, 2.6),
+    box(8, -8, 1.6, 1.6, 2.6),
+    box(-8, 8, 1.6, 1.6, 2.6),
+    // Mid-side step platforms (jumpable).
+    box(-13, 0, 2, 3, 1.0),
+    box(13, 0, 2, 3, 1.0),
+    // Cover ahead of the Z-end spawns.
+    box(0, -14, 4, 1.5, 1.2),
+    box(0, 14, 4, 1.5, 1.2),
+  ],
+  spawns: [
+    { pos: { x: 0, y: 0, z: -17 }, yaw: Math.PI },
+    { pos: { x: 0, y: 0, z: 17 }, yaw: 0 },
+    facing(-13, -13),
+    facing(13, -13),
+    facing(-13, 13),
+    facing(13, 13),
+  ],
+};
+
+/**
+ * "Trading Floor" — a central "ticker tower" you can parkour onto via low step
+ * platforms, with corner perches and flank walls. King-of-the-hill verticality.
+ */
+export const TRADING_FLOOR: GameMap = {
+  id: 'tradingfloor',
+  name: 'Trading Floor',
+  width: 38,
+  depth: 38,
+  wallHeight: 5,
+  obstacles: [
+    box(0, 0, 3, 3, 2.6), // central tower (reach the top from the steps)
+    // Step platforms hugging the tower (hop ground -> step -> tower).
+    box(-3.5, 0, 2, 2, 1.0),
+    box(3.5, 0, 2, 2, 1.0),
+    box(0, -3.5, 2, 2, 1.0),
+    box(0, 3.5, 2, 2, 1.0),
+    // Corner perches (jumpable vantage).
+    box(-10, -10, 2.5, 2.5, 1.4),
+    box(10, 10, 2.5, 2.5, 1.4),
+    box(10, -10, 2.5, 2.5, 1.4),
+    box(-10, 10, 2.5, 2.5, 1.4),
+    // Flank walls.
+    box(-15, 0, 1.5, 7, 2.2),
+    box(15, 0, 1.5, 7, 2.2),
+    // Spawn cover.
+    box(0, -13, 5, 1.5, 1.2),
+    box(0, 13, 5, 1.5, 1.2),
+  ],
+  spawns: [
+    { pos: { x: 0, y: 0, z: -16 }, yaw: Math.PI },
+    { pos: { x: 0, y: 0, z: 16 }, yaw: 0 },
+    facing(-14, -14),
+    facing(14, -14),
+    facing(-14, 14),
+    facing(14, 14),
+  ],
+};
+
 export const MAPS: Record<string, GameMap> = {
   [CROSSFIRE.id]: CROSSFIRE,
   [REFINERY.id]: REFINERY,
   [VAULT.id]: VAULT,
+  [DATACENTER.id]: DATACENTER,
+  [TRADING_FLOOR.id]: TRADING_FLOOR,
 };
 
-export const MAP_LIST: GameMap[] = [CROSSFIRE, REFINERY, VAULT];
+export const MAP_LIST: GameMap[] = [CROSSFIRE, REFINERY, VAULT, DATACENTER, TRADING_FLOOR];
 
 export const DEFAULT_MAP = CROSSFIRE;
 

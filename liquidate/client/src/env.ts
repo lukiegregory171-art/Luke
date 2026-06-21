@@ -40,6 +40,8 @@ export const ENV_THEMES: Record<string, EnvTheme> = {
   crossfire: DEFAULT_ENV,
   refinery: { ...DEFAULT_ENV, fog: 0x0a0c0a }, // faint warm
   vault: { ...DEFAULT_ENV, fog: 0x0a0710 }, // faint violet
+  datacenter: { ...DEFAULT_ENV, fog: 0x070d10 }, // faint cyan
+  tradingfloor: { ...DEFAULT_ENV, fog: 0x0c0a07 }, // faint gold
 };
 
 export function envTheme(map: GameMap): EnvTheme {
