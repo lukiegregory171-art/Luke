@@ -1012,3 +1012,56 @@ button.ghost:hover {
   background: #b06a2a;
   box-shadow: none;
 }
+
+/* --- Multi-kill / streak callout ------------------------------------------ */
+#announce {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 2.6rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--sol-gold, #e8b84b);
+  text-shadow:
+    0 0 24px rgba(232, 184, 75, 0.7),
+    0 2px 2px #000;
+  opacity: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#announce.show {
+  animation: announce 1.6s ease-out;
+}
+@keyframes announce {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.05);
+  }
+}
+
+/* --- Overlay card fade-in ------------------------------------------------- */
+.overlay-card:not(.hidden) {
+  animation: cardIn 0.24s ease-out;
+}
+@keyframes cardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

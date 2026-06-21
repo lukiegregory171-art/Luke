@@ -35,6 +35,7 @@ import type { Sfx } from './audio';
 import type { Impacts } from './impacts';
 import type { Shake } from './shake';
 import { Bot } from './bot';
+import { Streaks } from './callout';
 
 const STEP = 1 / 60;
 const RESPAWN = 1.5;
@@ -54,6 +55,8 @@ export class Practice {
   private score = 0;
   private botScore = 0;
   private acc = 0;
+  private readonly streaks = new Streaks();
+  private thrusting = false;
 
   constructor(
     private readonly map: GameMap,
@@ -123,7 +126,13 @@ export class Practice {
     const dash = canAct && this.input.consumeDash();
     if (dash) this.sfx.dash();
     const jump = canAct && this.input.consumeJump();
+    if (jump) this.sfx.jump();
     const thrust = canAct && this.input.keys.has('Space');
+    const thrusting = thrust && this.player.pos.y > 0.05 && this.player.fuel > 0.001;
+    if (thrusting !== this.thrusting) {
+      this.thrusting = thrusting;
+      this.sfx.thrustOn(thrusting);
+    }
     this.player = stepMovement(
       this.player,
       { moveFwd, moveRight, yaw: this.input.yaw, dash, jump, thrust },
@@ -176,6 +185,11 @@ export class Practice {
         this.hud.addKill('YOU', 'BOT', headshot);
         this.hud.banner('OPPONENT DOWN', 'good');
         this.sfx.kill();
+        const callout = this.streaks.onKill(performance.now());
+        if (callout) {
+          this.hud.announce(callout.text);
+          this.sfx.multiKill(callout.level);
+        }
       }
     }
 
@@ -206,6 +220,7 @@ export class Practice {
       this.hud.addKill('BOT', 'YOU', hit.headshot);
       this.hud.banner('YOU DIED', 'bad');
       this.sfx.death();
+      this.streaks.onDeath();
     }
   }
 

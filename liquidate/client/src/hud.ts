@@ -52,6 +52,7 @@ export class Hud {
   private readonly latency = document.getElementById('latency') as HTMLElement;
   private readonly damage = document.getElementById('damage') as HTMLElement;
   private readonly bannerEl = document.getElementById('banner') as HTMLElement;
+  private readonly announceEl = document.getElementById('announce') as HTMLElement;
   private readonly weaponEl = document.getElementById('weapon') as HTMLElement;
   private readonly killfeed = document.getElementById('killfeed') as HTMLElement;
   private readonly dmgArrow = document.getElementById('dmgdir-arrow') as HTMLElement;
@@ -137,6 +138,14 @@ export class Hud {
     el.style.top = `calc(50% - 26px)`;
     this.dmgnums.appendChild(el);
     setTimeout(() => el.remove(), 720);
+  }
+
+  /** Big centered callout (multi-kills / streaks). */
+  announce(text: string): void {
+    this.announceEl.textContent = text;
+    this.announceEl.classList.remove('show');
+    void this.announceEl.offsetWidth; // restart the animation
+    this.announceEl.classList.add('show');
   }
 
   /** Jetpack fuel meter (0..1). */

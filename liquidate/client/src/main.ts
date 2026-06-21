@@ -194,6 +194,7 @@ function showOver(result: MatchResult): void {
   hud.show(false);
   hud.showScoreboard(null);
   sfx.stopAmbient();
+  sfx.thrustOn(false);
   resumeHint.classList.add('hidden');
   window.__liq!.net = result.net;
   const title = document.getElementById('over-title') as HTMLElement;
@@ -236,6 +237,7 @@ function backToLobby(): void {
   impacts.reset();
   shake.reset();
   sfx.stopAmbient();
+  sfx.thrustOn(false);
   hud.show(false);
   hud.showScoreboard(null);
   showCard(cardMenu);

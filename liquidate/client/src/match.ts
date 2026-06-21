@@ -42,6 +42,7 @@ import type { Sfx } from './audio';
 import type { Impacts } from './impacts';
 import type { Shake } from './shake';
 import { COLORS } from './palette';
+import { Streaks } from './callout';
 
 const STEP = 1 / 60; // fixed input/prediction step
 const INTERP_MS = 100; // render the opponent this far in the past
@@ -99,6 +100,8 @@ export class Match {
   private playing = false;
   private over = false;
   private oppLeft = false;
+  private readonly streaks = new Streaks();
+  private thrusting = false;
 
   constructor(
     selfId: string,
@@ -178,6 +181,8 @@ export class Match {
     this.over = false;
     this.oppLeft = false;
     this.playing = true;
+    this.streaks.reset();
+    this.thrusting = false;
     this.syncCamera();
     this.updateScoreboard();
     this.hud.setHealth(MAX_HEALTH);
@@ -228,7 +233,14 @@ export class Match {
     const dash = canAct && this.input.consumeDash();
     if (dash) this.sfx.dash();
     const jump = canAct && this.input.consumeJump();
+    if (jump) this.sfx.jump();
     const thrust = canAct && this.input.keys.has('Space');
+    // Jetpack thrust loop while actually thrusting (airborne + fuel).
+    const thrusting = thrust && this.predicted.pos.y > 0.05 && this.predicted.fuel > 0.001;
+    if (thrusting !== this.thrusting) {
+      this.thrusting = thrusting;
+      this.sfx.thrustOn(thrusting);
+    }
 
     this.seq++;
     const msg: InputMessage = {
@@ -438,9 +450,15 @@ export class Match {
     if (victim === this.selfId) {
       this.hud.banner('YOU DIED', 'bad');
       this.sfx.death();
+      this.streaks.onDeath();
     } else if (killer === this.selfId) {
       this.hud.banner(this.mode === 'ffa' ? 'FRAG' : 'OPPONENT DOWN', 'good');
       this.sfx.kill();
+      const callout = this.streaks.onKill(performance.now());
+      if (callout) {
+        this.hud.announce(callout.text);
+        this.sfx.multiKill(callout.level);
+      }
     }
   }
 
@@ -458,6 +476,10 @@ export class Match {
     if (this.over) return;
     this.over = true;
     this.playing = false;
+    if (this.thrusting) {
+      this.thrusting = false;
+      this.sfx.thrustOn(false);
+    }
     this.hud.showScoreboard(null);
     const win =
       this.mode === 'tdm' ? over.winnerTeam === this.selfTeam : over.winner === this.selfId;

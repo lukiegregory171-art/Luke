@@ -25,6 +25,7 @@ export class Sfx {
   private master?: GainNode;
   private noise?: AudioBuffer;
   private ambient?: { osc: OscillatorNode; sub: OscillatorNode; gain: GainNode };
+  private thrustNode?: { src: AudioBufferSourceNode; gain: GainNode };
   private stepAcc = 0;
   private volume = 0.7;
   private muted = false;
@@ -130,6 +131,47 @@ export class Sfx {
 
   death(): void {
     this.tone(200, 0.4, 'sawtooth', 0.22, 70);
+  }
+
+  /** Short hop blip. */
+  jump(): void {
+    this.tone(440, 0.08, 'square', 0.1, 700);
+  }
+
+  /** Escalating multi-kill / streak callout (louder + higher with level). */
+  multiKill(level: number): void {
+    const base = 440 + level * 70;
+    this.tone(base, 0.12, 'triangle', 0.26);
+    setTimeout(() => this.tone(base * 1.5, 0.18, 'triangle', 0.26), 90);
+    if (level >= 3) setTimeout(() => this.tone(base * 2, 0.2, 'triangle', 0.24), 190);
+  }
+
+  /** Jetpack thrust loop — on while thrusting, off otherwise. */
+  thrustOn(on: boolean): void {
+    const out = this.out;
+    if (on) {
+      if (this.thrustNode || !this.ctx || !this.noise || !out) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 340;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.09, this.ctx.currentTime + 0.08);
+      src.connect(filter).connect(gain).connect(out);
+      src.start();
+      this.thrustNode = { src, gain };
+    } else {
+      if (!this.thrustNode || !this.ctx) return;
+      const { src, gain } = this.thrustNode;
+      const t = this.ctx.currentTime;
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+      src.stop(t + 0.12);
+      this.thrustNode = undefined;
+    }
   }
 
   /** Short UI click (button presses). */
