@@ -23,7 +23,7 @@ export const MAX_REWIND_MS = 250;
 /** How long a disconnected player may take to reconnect before forfeiting (ms). */
 export const RECONNECT_GRACE_MS = 10000;
 /** How long a queued player waits for a human before a bot fills the lobby (ms). */
-export const BOT_FILL_MS = 6000;
+export const BOT_FILL_MS = 4000;
 
 // --- Player ----------------------------------------------------------------
 export const PLAYER_RADIUS = 0.4; // horizontal collision radius (units = metres)

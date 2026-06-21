@@ -68,8 +68,9 @@ function harness(difficulty = 1) {
 describe('ServerBot (M3 bots-fill)', () => {
   it('emits a legal input aimed at the opponent, and fires with a clear shot', () => {
     const { routed, snap } = harness();
-    // Bot at z=-10 facing +Z; opponent straight ahead at z=+10.
-    for (let i = 0; i < 3; i++) snap([snapshot('B', 0, -10), snapshot('H', 0, 10)]);
+    // Bot at z=-10 facing +Z; opponent straight ahead at z=+10. Feed enough
+    // snapshots to clear the bot's reaction delay before it commits to firing.
+    for (let i = 0; i < 12; i++) snap([snapshot('B', 0, -10), snapshot('H', 0, 10)]);
 
     const inputs = routed.filter((m) => m.type === 'input') as Extract<
       ClientMessage,

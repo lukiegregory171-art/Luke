@@ -30,8 +30,9 @@ import {
 
 const DESIRED_RANGE = 11; // metres the bot tries to hold
 const TURN_RATE = 5.0; // rad/s aim slew (reaction speed)
-const AIM_JITTER = 0.05; // radians of imperfect aim at difficulty 0
+const AIM_JITTER = 0.08; // radians of imperfect aim at difficulty 0
 const FIRE_AIM_TOLERANCE = 0.12; // how "on target" before it shoots
+const REACTION_MS = 0.22; // seconds the bot must hold a clean shot before firing
 
 export class ServerBot {
   private map?: GameMap;
@@ -45,14 +46,16 @@ export class ServerBot {
   private teamMode = false; // TDM: only shoot the other team
   private teams: Record<string, number> = {};
   private selfTeam = 0;
+  private aimHold = 0; // seconds a clean shot has been lined up (reaction delay)
 
   /**
    * @param selfId the bot's connection id
-   * @param difficulty 0..1 — higher = faster reaction + tighter aim
+   * @param difficulty 0..1 — higher = faster reaction + tighter aim. Kept low by
+   *   default so practice bots are fun to beat, not punishing.
    */
   constructor(
     private readonly selfId: string,
-    private readonly difficulty = 0.6,
+    private readonly difficulty = 0.4,
   ) {}
 
   /** Wire the bot's outgoing inputs into its Room. */
@@ -111,9 +114,10 @@ export class ServerBot {
     const oppEye: Vec3 = { x: opp.x, y: opp.y + EYE_HEIGHT, z: opp.z };
     const to: Vec3 = { x: oppEye.x - selfEye.x, y: oppEye.y - selfEye.y, z: oppEye.z - selfEye.z };
 
-    // Aim: slew toward the target (reaction scales with difficulty).
+    // Aim: slew toward the target (reaction scales with difficulty). Easy bots
+    // turn slowly enough that a strafing human can break their aim.
     const want = aimAngles(to);
-    const turn = TURN_RATE * (0.6 + this.difficulty * 0.8) * dt;
+    const turn = TURN_RATE * (0.5 + this.difficulty * 0.7) * dt;
     this.yaw += clamp(angleDiff(this.yaw, want.yaw), -turn, turn);
     this.pitch = clamp(this.pitch + clamp(want.pitch - this.pitch, -turn, turn), -PITCH_LIMIT, PITCH_LIMIT);
 
@@ -130,14 +134,18 @@ export class ServerBot {
     const moveFwd = clamp((dist - DESIRED_RANGE) / 4, -1, 1);
     const moveRight = this.strafe;
 
-    // Fire when aimed, in range, with LOS, ammo, not reloading.
+    // Fire when aimed, in range, with LOS, ammo, not reloading — but only after
+    // holding that clean shot for a human-like reaction beat, so the bot can't
+    // instantly punish the moment you peek.
     const aimErr = Math.abs(angleDiff(this.yaw, want.yaw)) + Math.abs(this.pitch - want.pitch);
-    const willFire =
+    const lined =
       hasLos &&
       dist <= ASSAULT.range &&
       aimErr < FIRE_AIM_TOLERANCE &&
       self.ammo > 0 &&
       !self.reloading;
+    this.aimHold = lined ? this.aimHold + dt : 0;
+    const willFire = lined && this.aimHold >= REACTION_MS;
     if (willFire) {
       // Imperfect aim so a human can win; less jitter at higher difficulty.
       const jitter = AIM_JITTER * (1 - this.difficulty * 0.6);
