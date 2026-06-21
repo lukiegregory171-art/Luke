@@ -22,6 +22,7 @@ import {
   RESPAWN_DELAY,
   SERVER_PORT,
   TARGET_KILLS,
+  TDM_TARGET_KILLS,
   TICK_RATE,
   decode,
   encode,
@@ -42,6 +43,7 @@ const PORT = Number(process.env.PORT ?? SERVER_PORT);
 // deterministic).
 const targetKills = Number(process.env.TARGET_KILLS) || TARGET_KILLS;
 const ffaTargetKills = Number(process.env.FFA_TARGET_KILLS) || FFA_TARGET_KILLS;
+const tdmTargetKills = Number(process.env.TDM_TARGET_KILLS) || TDM_TARGET_KILLS;
 const respawnDelay = Number(process.env.RESPAWN_DELAY) || RESPAWN_DELAY;
 const graceMs = Number(process.env.RECONNECT_GRACE_MS) || RECONNECT_GRACE_MS;
 const botFillMs = Number(process.env.BOT_FILL_MS) || BOT_FILL_MS;
@@ -111,7 +113,7 @@ const bank = new Bank(process.env.LIQUIDATE_DB ?? 'data/liquidate.sqlite');
 const matchmaker = new Matchmaker(
   bank,
   pickMap,
-  { targetKills, ffaTargetKills, respawnDelay },
+  { targetKills, ffaTargetKills, tdmTargetKills, respawnDelay },
   graceMs,
   botFillMs,
 );

@@ -140,13 +140,14 @@ lobby.onDeposit = (amount) => net.send({ type: 'deposit', amount });
 lobby.onWithdraw = (amount) => net.send({ type: 'withdraw', amount });
 lobby.onQueue = (stake) => startMatch(stake, 'duel');
 lobby.onFfa = () => startMatch(0, 'ffa');
+lobby.onTdm = () => startMatch(0, 'tdm');
 lobby.onPractice = startPractice;
 
 document.getElementById('cancel')!.addEventListener('click', () => location.reload());
 document.getElementById('play-again')!.addEventListener('click', backToLobby);
 resumeHint.addEventListener('click', () => input.requestLock());
 
-function startMatch(stake: number, queueMode: 'duel' | 'ffa'): void {
+function startMatch(stake: number, queueMode: 'duel' | 'ffa' | 'tdm'): void {
   sfx.resume();
   mode = 'match';
   match = new Match(selfId, DEFAULT_MAP, world, input, gun, hud, net, opponents, sfx, impacts, shake, {
@@ -196,7 +197,13 @@ function showOver(result: MatchResult): void {
   const detail = document.getElementById('over-detail') as HTMLElement;
   const boardEl = document.getElementById('over-board') as HTMLElement;
 
-  if (result.mode === 'ffa') {
+  if (result.mode === 'tdm') {
+    title.textContent = result.win ? 'VICTORY' : 'DEFEAT';
+    title.className = 'small ' + (result.win ? 'win' : 'lose');
+    detail.textContent = result.win
+      ? `Your team won. You scored ${result.selfScore} frags. Team deathmatch — no stake.`
+      : `Your team lost. You scored ${result.selfScore} frags. Team deathmatch — no stake.`;
+  } else if (result.mode === 'ffa') {
     // FFA: placement out of the field; free, so no economy line.
     const win = result.place === 1;
     title.textContent = win ? 'VICTORY' : `#${result.place} / ${result.board.length}`;

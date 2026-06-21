@@ -42,6 +42,9 @@ export class ServerBot {
   private repath = 0;
   private route?: (msg: ClientMessage) => void;
   private stopped = false;
+  private teamMode = false; // TDM: only shoot the other team
+  private teams: Record<string, number> = {};
+  private selfTeam = 0;
 
   /**
    * @param selfId the bot's connection id
@@ -68,6 +71,9 @@ export class ServerBot {
     if (this.stopped) return;
     if (msg.type === 'start') {
       this.map = msg.map;
+      this.teamMode = msg.mode === 'tdm';
+      this.teams = msg.teams ?? {};
+      this.selfTeam = this.teams[this.selfId] ?? 0;
       const spawn = msg.map.spawns[msg.selfSpawnIndex];
       this.yaw = spawn.yaw;
       this.pitch = 0;
@@ -81,11 +87,12 @@ export class ServerBot {
     const self = snap.players.find((p) => p.id === this.selfId);
     if (!self) return;
 
-    // Target the nearest live opponent (works for duel and FFA alike).
+    // Target the nearest live ENEMY (TDM skips teammates; duel/FFA = anyone).
     let opp: PlayerSnapshot | undefined;
     let bestDist = Infinity;
     for (const p of snap.players) {
       if (p.id === this.selfId || !p.alive) continue;
+      if (this.teamMode && this.teams[p.id] === this.selfTeam) continue;
       const d = Math.hypot(p.x - self.x, p.z - self.z);
       if (d < bestDist) {
         bestDist = d;

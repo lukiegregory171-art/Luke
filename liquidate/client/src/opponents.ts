@@ -44,6 +44,11 @@ export class Opponents {
     for (const o of this.byId.values()) o.update(renderTime, dt);
   }
 
+  /** Team tint a player (ally vs enemy in TDM). */
+  setColor(id: string, hex: number): void {
+    this.byId.get(id)?.setColor(hex);
+  }
+
   /** Latest feet position of a given player (for impacts / damage direction). */
   positionOf(id: string): { x: number; z: number } | undefined {
     return this.byId.get(id)?.position();

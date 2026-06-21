@@ -27,6 +27,7 @@ import { log } from './logger';
 interface MatchmakerOptions {
   targetKills: number; // duel
   ffaTargetKills: number;
+  tdmTargetKills: number;
   respawnDelay: number;
 }
 
@@ -47,10 +48,12 @@ interface BotBinding {
 export class Matchmaker {
   private readonly duelQueue: Session[] = [];
   private readonly ffaQueue: Session[] = [];
+  private readonly tdmQueue: Session[] = [];
   private readonly roomByConn = new Map<string, RoomCtx>();
   private readonly pausedByAccount = new Map<string, { ctx: RoomCtx; slot: number }>();
   private readonly botFillTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private ffaFillTimer?: ReturnType<typeof setTimeout>;
+  private tdmFillTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly bank: Bank,
@@ -60,20 +63,28 @@ export class Matchmaker {
     private readonly botFillMs: number,
   ) {}
 
-  /** Enqueue a logged-in session (duel by default, or free-for-all). */
+  /** Enqueue a logged-in session (duel by default, free-for-all, or team DM). */
   enqueue(session: Session, rawStake: number, mode: MatchMode = 'duel'): void {
     const acct = session.accountId ? this.bank.get(session.accountId) : undefined;
     if (!acct) return;
     if (this.roomByConn.has(session.conn.id)) return;
-    if (this.duelQueue.includes(session) || this.ffaQueue.includes(session)) return;
+    if (
+      this.duelQueue.includes(session) ||
+      this.ffaQueue.includes(session) ||
+      this.tdmQueue.includes(session)
+    ) {
+      return;
+    }
 
-    if (mode === 'ffa') {
-      session.stake = 0; // FFA is free
+    if (mode === 'ffa' || mode === 'tdm') {
+      session.stake = 0; // team modes are free
       session.conn.send({ type: 'waiting' });
-      this.ffaQueue.push(session);
-      if (this.ffaQueue.length >= FFA_SIZE) this.startFfaFromQueue();
-      else if (!this.ffaFillTimer) {
-        this.ffaFillTimer = setTimeout(() => this.startFfaFromQueue(), this.botFillMs);
+      const queue = mode === 'ffa' ? this.ffaQueue : this.tdmQueue;
+      queue.push(session);
+      if (queue.length >= FFA_SIZE) this.startTeamMatch(mode);
+      else {
+        const which = mode === 'ffa' ? 'ffaFillTimer' : 'tdmFillTimer';
+        if (!this[which]) this[which] = setTimeout(() => this.startTeamMatch(mode), this.botFillMs);
       }
       return;
     }
@@ -112,20 +123,21 @@ export class Matchmaker {
     return true;
   }
 
-  /** A connection dropped: leave the queue, or pause/forfeit (duel) / leave (ffa). */
+  /** A connection dropped: leave the queue, or pause/forfeit (duel) / leave (team). */
   remove(session: Session): void {
     this.clearBotTimer(session.conn.id);
-    const dq = this.duelQueue.indexOf(session);
-    if (dq >= 0) this.duelQueue.splice(dq, 1);
-    const fq = this.ffaQueue.indexOf(session);
-    if (fq >= 0) this.ffaQueue.splice(fq, 1);
+    for (const q of [this.duelQueue, this.ffaQueue, this.tdmQueue]) {
+      const i = q.indexOf(session);
+      if (i >= 0) q.splice(i, 1);
+    }
 
     const ctx = this.roomByConn.get(session.conn.id);
     if (!ctx) return;
     const slot = ctx.slots.findIndex((s) => s === session);
     this.roomByConn.delete(session.conn.id);
 
-    if (ctx.mode === 'ffa') {
+    // Team modes (FFA/TDM): drop the player; the match continues for the rest.
+    if (ctx.mode !== 'duel') {
       if (slot >= 0) ctx.room.leave(slot);
       // No humans left? End the match (bots don't play to an empty room).
       const humansLeft = ctx.slots.some((s) => s.accountId && s.conn.isOpen());
@@ -190,15 +202,20 @@ export class Matchmaker {
     log.info('bot_fill', { human: session.accountId });
   }
 
-  /** Start an FFA room from the waiting queue, filling spare slots with bots. */
-  private startFfaFromQueue(): void {
-    if (this.ffaFillTimer) {
+  /** Start an FFA or TDM room from its queue, filling spare slots with bots. */
+  private startTeamMatch(mode: 'ffa' | 'tdm'): void {
+    const queue = mode === 'ffa' ? this.ffaQueue : this.tdmQueue;
+    if (mode === 'ffa' && this.ffaFillTimer) {
       clearTimeout(this.ffaFillTimer);
       this.ffaFillTimer = undefined;
     }
+    if (mode === 'tdm' && this.tdmFillTimer) {
+      clearTimeout(this.tdmFillTimer);
+      this.tdmFillTimer = undefined;
+    }
     const humans: Session[] = [];
-    while (this.ffaQueue.length && humans.length < FFA_SIZE) {
-      const s = this.ffaQueue.shift()!;
+    while (queue.length && humans.length < FFA_SIZE) {
+      const s = queue.shift()!;
       if (s.conn.isOpen() && !this.roomByConn.has(s.conn.id)) humans.push(s);
     }
     if (humans.length === 0) return;
@@ -210,13 +227,25 @@ export class Matchmaker {
       sessions.push(session);
       bindings.push(binding);
     }
-    this.createRoom(sessions, 'ffa', 0, bindings);
-    log.info('ffa_start', { humans: humans.length, bots: bindings.length });
+    // TDM: alternate teams for a balanced 3v3 (humans interspersed with bots).
+    const teams = sessions.map((_, i) => (mode === 'tdm' ? i % 2 : 0));
+    this.createRoom(sessions, mode, 0, bindings, teams);
+    log.info(`${mode}_start`, { humans: humans.length, bots: bindings.length });
 
     // More humans still queued? Start forming the next room.
-    if (this.ffaQueue.length > 0 && !this.ffaFillTimer) {
-      this.ffaFillTimer = setTimeout(() => this.startFfaFromQueue(), this.botFillMs);
+    if (queue.length > 0) {
+      if (mode === 'ffa' && !this.ffaFillTimer) {
+        this.ffaFillTimer = setTimeout(() => this.startTeamMatch('ffa'), this.botFillMs);
+      } else if (mode === 'tdm' && !this.tdmFillTimer) {
+        this.tdmFillTimer = setTimeout(() => this.startTeamMatch('tdm'), this.botFillMs);
+      }
     }
+  }
+
+  private targetKillsFor(mode: MatchMode): number {
+    if (mode === 'ffa') return this.opts.ffaTargetKills;
+    if (mode === 'tdm') return this.opts.tdmTargetKills;
+    return this.opts.targetKills;
   }
 
   private makeBot(name = 'BOT'): { session: Session; binding: BotBinding } {
@@ -245,6 +274,7 @@ export class Matchmaker {
     mode: MatchMode,
     stake: number,
     bots: BotBinding[],
+    teams: number[] = sessions.map(() => 0),
   ): void {
     const latencyOf = (connId: string): number =>
       sessions.find((s) => s.conn.id === connId)?.rtt ?? 0;
@@ -255,9 +285,10 @@ export class Matchmaker {
     const room = new Room(
       sessions.map((s) => s.conn),
       sessions.map((s) => s.handle ?? 'Player'),
+      teams,
       this.pickMap(),
       {
-        targetKills: mode === 'ffa' ? this.opts.ffaTargetKills : this.opts.targetKills,
+        targetKills: this.targetKillsFor(mode),
         respawnDelay: this.opts.respawnDelay,
         mode,
       },

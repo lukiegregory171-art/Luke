@@ -78,6 +78,7 @@ beforeAll(async () => {
       BOT_FILL_MS: '300', // fill fast for the test
       TARGET_KILLS: '10', // duel: don't let the match end during observation
       FFA_TARGET_KILLS: '2', // ffa: end quickly once bots frag each other
+      TDM_TARGET_KILLS: '3', // tdm: end quickly once a team frags enough
       RESPAWN_DELAY: '0.3',
       MAP: 'crossfire',
       LIQUIDATE_DB: ':memory:',
@@ -151,6 +152,31 @@ describe('bots fill empty lobbies (M3)', () => {
     await c.waitUntil(() => c.of('over').length > 0, 15000);
     const over = c.of('over')[0] as OverMessage;
     expect(start.players).toContain(over.winner);
+
+    c.close();
+  });
+
+  it('fills a team deathmatch (3v3) and plays to a team win', async () => {
+    const c = new Client();
+    await c.open();
+    await c.waitUntil(() => c.id !== '');
+    c.send({ type: 'login', handle: `tdm_${Date.now()}` });
+    await c.waitUntil(() => c.of('account').length > 0);
+    c.send({ type: 'queue', stake: 0, mode: 'tdm' });
+
+    await c.waitUntil(() => c.of('start').length > 0);
+    const start = c.of('start')[0] as StartMessage;
+    expect(start.mode).toBe('tdm');
+    expect(start.players.length).toBe(6);
+    // Balanced teams: 3 per side.
+    const counts = [0, 0];
+    for (const id of start.players) counts[start.teams[id]]++;
+    expect(counts).toEqual([3, 3]);
+
+    // A team reaches the frag target → server declares the winning TEAM.
+    await c.waitUntil(() => c.of('over').length > 0, 15000);
+    const over = c.of('over')[0] as OverMessage;
+    expect(over.winnerTeam === 0 || over.winnerTeam === 1).toBe(true);
 
     c.close();
   });

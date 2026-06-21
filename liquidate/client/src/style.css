@@ -883,3 +883,19 @@ button.ghost:hover {
   color: #6b7a89;
   letter-spacing: 0.08em;
 }
+
+/* --- Team colours (TDM scoreboard + team scores) -------------------------- */
+.t-ally,
+#scoreboard tr.ally td,
+.over-board tr.ally td {
+  color: var(--accent);
+}
+.t-enemy,
+#scoreboard tr.enemy td,
+.over-board tr.enemy td {
+  color: var(--danger);
+}
+#scoreboard tr.me td,
+.over-board tr.me td {
+  font-weight: 800;
+}

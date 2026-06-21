@@ -38,6 +38,11 @@ export class Opponent {
     this.character.reset();
   }
 
+  /** Team tint (ally vs enemy in TDM). */
+  setColor(hex: number): void {
+    this.character.setTeam(hex);
+  }
+
   /** Free GPU resources + remove from the scene (when this player leaves). */
   dispose(): void {
     this.character.dispose();

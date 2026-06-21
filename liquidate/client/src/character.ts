@@ -57,6 +57,7 @@ export class Character {
   private readonly armL: THREE.Group;
   private readonly armR: THREE.Group;
   private readonly mats: THREE.Material[] = [];
+  private readonly teamMat: THREE.MeshStandardMaterial;
 
   private phase = 0; // walk-cycle phase
   private idle = 0; // idle-breathing phase
@@ -71,6 +72,7 @@ export class Character {
     // flat-shaded so the silhouette reads; the team glow is what you track.
     const bodyMat = matte(colors.body);
     const teamMat = neon(colors.team, 2.4); // shared by visor + chest + ground ring
+    this.teamMat = teamMat;
     this.mats.push(bodyMat, teamMat);
 
     // Torso (chest tapering to waist), centred on the body hurtsphere height.
@@ -112,6 +114,11 @@ export class Character {
 
     this.root.visible = false;
     this.scene.add(this.root);
+  }
+
+  /** Recolor the team accents (visor/chest/ground ring) — e.g. ally vs enemy. */
+  setTeam(color: number): void {
+    this.teamMat.emissive.setHex(color); // neon glow is the team colour
   }
 
   /** Place the root at the authoritative feet position + facing (no animation). */

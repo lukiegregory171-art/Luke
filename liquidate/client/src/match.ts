@@ -41,6 +41,7 @@ import type { Opponents } from './opponents';
 import type { Sfx } from './audio';
 import type { Impacts } from './impacts';
 import type { Shake } from './shake';
+import { COLORS } from './palette';
 
 const STEP = 1 / 60; // fixed input/prediction step
 const INTERP_MS = 100; // render the opponent this far in the past
@@ -87,6 +88,8 @@ export class Match {
   private oppScore = 0; // leader among the other players (for the scoreboard/result)
   private lastHeadshot = false;
   private names: Record<string, string> = {};
+  private teams: Record<string, number> = {};
+  private selfTeam = 0;
   private snapPlayers: { id: string; score: number; alive: boolean }[] = [];
 
   private lastSnapTime = 0;
@@ -158,6 +161,8 @@ export class Match {
     this.map = start.map;
     this.mode = start.mode;
     this.names = start.names;
+    this.teams = start.teams;
+    this.selfTeam = start.teams[this.selfId] ?? 0;
     this.snapPlayers = [];
     this.world.setMap(this.map);
     this.spawnIndex = start.selfSpawnIndex;
@@ -328,6 +333,11 @@ export class Match {
       if (p.id === this.selfId) continue;
       present.add(p.id);
       this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.y, p.z, p.yaw, p.alive);
+      // TDM: teammates glow GREEN, enemies RED (relative to you).
+      if (this.mode === 'tdm') {
+        const ally = this.teams[p.id] === this.selfTeam;
+        this.opponents.setColor(p.id, ally ? COLORS.green : COLORS.red);
+      }
       if (p.score > leader) leader = p.score;
     }
     this.opponents.retainOnly(present);
@@ -341,8 +351,25 @@ export class Match {
   }
 
   private updateScoreboard(): void {
-    if (this.mode === 'ffa') this.hud.setFrags(this.selfScore, this.oppScore);
-    else this.hud.setScores(this.selfScore, this.oppScore);
+    if (this.mode === 'tdm') {
+      const [mine, theirs] = this.teamTotals();
+      this.hud.setTeamScores(mine, theirs);
+    } else if (this.mode === 'ffa') {
+      this.hud.setFrags(this.selfScore, this.oppScore);
+    } else {
+      this.hud.setScores(this.selfScore, this.oppScore);
+    }
+  }
+
+  /** TDM team frag totals as [yourTeam, enemyTeam]. */
+  private teamTotals(): [number, number] {
+    let mine = 0;
+    let theirs = 0;
+    for (const p of this.snapPlayers) {
+      if (this.teams[p.id] === this.selfTeam) mine += p.score;
+      else theirs += p.score;
+    }
+    return [mine, theirs];
   }
 
   /** Build sorted scoreboard rows from {id,score,alive} entries. */
@@ -353,6 +380,7 @@ export class Match {
         frags: e.score,
         self: e.id === this.selfId,
         alive: e.alive,
+        ally: this.mode === 'tdm' ? this.teams[e.id] === this.selfTeam : undefined,
       }))
       .sort((a, b) => b.frags - a.frags);
   }
@@ -420,7 +448,8 @@ export class Match {
     this.over = true;
     this.playing = false;
     this.hud.showScoreboard(null);
-    const win = over.winner === this.selfId;
+    const win =
+      this.mode === 'tdm' ? over.winnerTeam === this.selfTeam : over.winner === this.selfId;
     const board = this.rows(
       Object.entries(over.scores).map(([id, score]) => ({ id, score, alive: true })),
     );

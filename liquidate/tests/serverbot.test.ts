@@ -54,6 +54,7 @@ function harness(difficulty = 1) {
     opponentId: 'H',
     players: ['B', 'H'],
     names: { B: 'BOT', H: 'H' },
+    teams: { B: 0, H: 0 },
     selfSpawnIndex: 0,
     map: FLAT,
     stake: 0,

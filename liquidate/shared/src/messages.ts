@@ -109,6 +109,7 @@ export interface StartMessage {
   opponentId: PlayerId; // 1v1: the other player; FFA: '' (use `players`)
   players: PlayerId[]; // all player ids in the match (self + others)
   names: Record<PlayerId, string>; // display name per id (handle, or "BOT n")
+  teams: Record<PlayerId, number>; // team index per id (0/1; TDM). 0 for non-team modes.
   selfSpawnIndex: number;
   map: GameMap; // the map this match is played on (may differ from init's default)
   stake: number; // each player's demo stake; pot = 2 * stake (FFA is free: 0)
@@ -194,7 +195,8 @@ export interface RespawnEvent {
 
 export interface OverMessage {
   type: 'over';
-  winner: PlayerId;
+  winner: PlayerId; // duel/ffa winner; '' for TDM (use winnerTeam)
+  winnerTeam?: number; // TDM winning team index
   scores: Record<PlayerId, number>;
   stake: number; // each player's stake
   pot: number; // 2 * stake

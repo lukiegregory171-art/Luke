@@ -30,6 +30,7 @@ export class Lobby {
   onLogin: (handle: string) => void = () => {};
   onQueue: (stake: number) => void = () => {};
   onFfa: () => void = () => {};
+  onTdm: () => void = () => {};
   onDeposit: (amount: number) => void = () => {};
   onWithdraw: (amount: number) => void = () => {};
   onPractice: () => void = () => {};
@@ -49,6 +50,7 @@ export class Lobby {
     withdraw: document.getElementById('lobby-withdraw') as HTMLButtonElement,
     find: document.getElementById('lobby-find') as HTMLButtonElement,
     ffa: document.getElementById('lobby-ffa') as HTMLButtonElement,
+    tdm: document.getElementById('lobby-tdm') as HTMLButtonElement,
     practice: document.getElementById('lobby-practice') as HTMLButtonElement,
   };
 
@@ -67,6 +69,9 @@ export class Lobby {
     });
     this.el.ffa.addEventListener('click', () => {
       if (this.account) this.onFfa();
+    });
+    this.el.tdm.addEventListener('click', () => {
+      if (this.account) this.onTdm();
     });
     this.el.practice.addEventListener('click', () => this.onPractice());
 
@@ -111,6 +116,7 @@ export class Lobby {
     this.el.account.classList.toggle('hidden', !loggedIn);
     this.el.find.disabled = !loggedIn;
     this.el.ffa.disabled = !loggedIn;
+    this.el.tdm.disabled = !loggedIn;
 
     if (this.account) {
       this.el.who.textContent = this.account.handle;

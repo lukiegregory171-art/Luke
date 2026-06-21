@@ -65,6 +65,7 @@ const HISTORY_MS = 1000;
 interface PlayerSim {
   conn: Connection;
   name: string;
+  team: number;
   spawnIndex: number;
   connected: boolean;
   move: MoveState;
@@ -92,6 +93,7 @@ function fullAmmo(): Record<WeaponId, number> {
 export class Room {
   private readonly players: PlayerSim[];
   private readonly mode: MatchMode;
+  private readonly teamScores = [0, 0]; // TDM: frags per team
   private interval?: ReturnType<typeof setInterval>;
   private tickCount = 0;
   private over = false;
@@ -99,6 +101,7 @@ export class Room {
   constructor(
     conns: Connection[],
     names: string[],
+    teams: number[],
     private readonly map: GameMap,
     private readonly opts: RoomOptions,
     private readonly stake: number,
@@ -109,14 +112,15 @@ export class Room {
     ) => void,
   ) {
     this.mode = opts.mode;
-    this.players = conns.map((c, i) => this.makePlayer(c, names[i] ?? c.id, i));
+    this.players = conns.map((c, i) => this.makePlayer(c, names[i] ?? c.id, teams[i] ?? 0, i));
   }
 
-  private makePlayer(conn: Connection, name: string, spawnIndex: number): PlayerSim {
+  private makePlayer(conn: Connection, name: string, team: number, spawnIndex: number): PlayerSim {
     const spawn = this.map.spawns[spawnIndex % this.map.spawns.length];
     return {
       conn,
       name,
+      team,
       spawnIndex,
       connected: true,
       move: makeMoveState(spawn.pos),
@@ -146,13 +150,18 @@ export class Room {
   private sendStart(p: PlayerSim): void {
     const others = this.players.filter((o) => o !== p);
     const names: Record<string, string> = {};
-    for (const o of this.players) names[o.conn.id] = o.name;
+    const teams: Record<string, number> = {};
+    for (const o of this.players) {
+      names[o.conn.id] = o.name;
+      teams[o.conn.id] = o.team;
+    }
     p.conn.send({
       type: 'start',
       mode: this.mode,
       opponentId: this.mode === 'duel' && others[0] ? others[0].conn.id : '',
       players: this.players.map((o) => o.conn.id),
       names,
+      teams,
       selfSpawnIndex: p.spawnIndex,
       map: this.map,
       stake: this.stake,
@@ -367,10 +376,17 @@ export class Room {
     const dir = aimDirection(shooter.yaw, shooter.pitch);
     this.broadcast({ type: 'fire', id: shooter.conn.id, weapon: shooter.weapon, origin: eye, dir });
 
-    // Lag-comp box per target (where it was on the shooter's screen).
+    // Lag-comp box per target (where it was on the shooter's screen). In TDM,
+    // friendly fire is OFF — teammates are not valid targets.
     const lag = clamp(this.latencyOf(shooter.conn.id) / 2 + INTERP_MS, 0, MAX_REWIND_MS);
     const viewTime = Date.now() - lag;
-    const targets = this.players.filter((t) => t !== shooter && t.alive && t.connected);
+    const targets = this.players.filter(
+      (t) =>
+        t !== shooter &&
+        t.alive &&
+        t.connected &&
+        !(this.mode === 'tdm' && t.team === shooter.team),
+    );
 
     const tally = new Map<PlayerSim, { dmg: number; head: boolean }>();
     for (let i = 0; i < w.pellets; i++) {
@@ -407,7 +423,13 @@ export class Room {
         target.respawnTimer = this.opts.respawnDelay;
         shooter.score++;
         this.broadcast({ type: 'kill', killer: shooter.conn.id, victim: target.conn.id });
-        if (shooter.score >= this.opts.targetKills) {
+        if (this.mode === 'tdm') {
+          this.teamScores[shooter.team] = (this.teamScores[shooter.team] ?? 0) + 1;
+          if (this.teamScores[shooter.team] >= this.opts.targetKills) {
+            this.endMatch(null, shooter.team);
+            return;
+          }
+        } else if (shooter.score >= this.opts.targetKills) {
           this.endMatch(shooter.conn.id);
           return;
         }
@@ -447,10 +469,15 @@ export class Room {
     });
   }
 
-  /** Duel: own spawn. FFA: the spawn farthest from other live players. */
+  /**
+   * Duel: own spawn. FFA: farthest from any live player. TDM: farthest from live
+   * ENEMIES (so you don't spawn in the enemy's lap, but can group with allies).
+   */
   private pickRespawn(p: PlayerSim): { pos: Vec3; yaw: number } {
     if (this.mode === 'duel') return this.map.spawns[p.spawnIndex % this.map.spawns.length];
-    const enemies = this.players.filter((o) => o !== p && o.alive && o.connected);
+    const enemies = this.players.filter(
+      (o) => o !== p && o.alive && o.connected && !(this.mode === 'tdm' && o.team === p.team),
+    );
     let best = this.map.spawns[p.spawnIndex % this.map.spawns.length];
     let bestDist = -1;
     for (const s of this.map.spawns) {
@@ -467,19 +494,20 @@ export class Room {
     return best;
   }
 
-  private endMatch(winnerId: string): void {
+  private endMatch(winnerId: string | null, winnerTeam?: number): void {
     if (this.over) return;
     this.over = true;
-    this.broadcast(this.overMessage(winnerId));
-    log.info('match_over', { winner: winnerId, scores: this.scores() });
+    this.broadcast(this.overMessage(winnerId, winnerTeam));
+    log.info('match_over', { winner: winnerId, winnerTeam, scores: this.scores() });
     this.cleanup(winnerId);
   }
 
-  private overMessage(winnerId: string): OverMessage {
+  private overMessage(winnerId: string | null, winnerTeam?: number): OverMessage {
     const pot = this.stake * 2;
     return {
       type: 'over',
-      winner: winnerId,
+      winner: winnerId ?? '',
+      winnerTeam,
       scores: this.scores(),
       stake: this.stake,
       pot,

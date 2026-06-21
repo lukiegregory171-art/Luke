@@ -10,6 +10,7 @@ export interface ScoreRow {
   frags: number;
   self: boolean;
   alive: boolean;
+  ally?: boolean; // TDM: on your team (green) vs enemy (red); undefined = no teams
 }
 
 /** Escape user-supplied handles before inserting into innerHTML (XSS-safe). */
@@ -22,11 +23,13 @@ function esc(s: string): string {
 /** Build a scoreboard table (shared by the in-match Tab view + the over card). */
 export function scoreboardHTML(rows: ScoreRow[], title: string): string {
   const body = rows
-    .map(
-      (r, i) =>
-        `<tr class="${r.self ? 'me' : ''}${r.alive ? '' : ' dead'}">` +
-        `<td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.frags}</td></tr>`,
-    )
+    .map((r, i) => {
+      const team = r.ally === true ? ' ally' : r.ally === false ? ' enemy' : '';
+      return (
+        `<tr class="${r.self ? 'me' : ''}${team}${r.alive ? '' : ' dead'}">` +
+        `<td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.frags}</td></tr>`
+      );
+    })
     .join('');
   return (
     `<div class="sb-title">${esc(title)}</div>` +
@@ -95,6 +98,12 @@ export class Hud {
   /** FFA: your frags vs the current leader. */
   setFrags(self: number, leader: number): void {
     this.score.innerHTML = `FRAGS&nbsp;<b>${self}</b>&nbsp;·&nbsp;LEAD&nbsp;<b>${leader}</b>`;
+  }
+
+  /** TDM: your team's frags vs the enemy team's. */
+  setTeamScores(mine: number, theirs: number): void {
+    this.score.innerHTML =
+      `<b class="t-ally">${mine}</b>&nbsp;TEAM&nbsp;·&nbsp;ENEMY&nbsp;<b class="t-enemy">${theirs}</b>`;
   }
 
   /** Live scoreboard (held Tab). */
