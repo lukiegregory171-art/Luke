@@ -29,6 +29,7 @@ export interface InputMessage {
   pitch: number; // radians
   dash?: boolean; // edge-triggered dash request
   jump?: boolean; // edge-triggered jump request
+  thrust?: boolean; // held jump key (jetpack thrust)
 }
 
 export interface FireMessage {
@@ -143,6 +144,7 @@ export interface PlayerSnapshot {
   vy: number; // vertical velocity (jump/gravity reconciliation)
   vz: number;
   dashCd: number; // dash cooldown remaining (for client reconciliation)
+  fuel: number; // jetpack fuel 0..1 (for client reconciliation + HUD)
   yaw: number;
   pitch: number;
   health: number;

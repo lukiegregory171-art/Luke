@@ -45,6 +45,12 @@ export const GRAVITY = 24; // units/s^2 pulling players down
 export const JUMP_SPEED = 9; // upward launch velocity (~1.7u peak — clears a crate)
 export const AIR_CONTROL = 0.45; // fraction of ground accel usable while airborne
 
+// --- Jetpack ability (hold jump in the air to thrust; drains fuel) ----------
+export const JETPACK_ACCEL = 42; // upward thrust accel while held (net +ve vs gravity)
+export const JETPACK_MAX_RISE = 6; // cap on jetpack-driven rise speed (units/s)
+export const FUEL_DRAIN = 0.55; // fuel/sec consumed while thrusting (~1.8s of flight)
+export const FUEL_RECHARGE = 0.45; // fuel/sec regained while grounded
+
 // --- Hitboxes (spheres relative to feet position) --------------------------
 // Used by server-side hit detection. Body covers the torso, head sits on top.
 export const BODY_SPHERE = { centerY: 1.0, radius: 0.45 };

@@ -13,9 +13,13 @@ import {
   AIR_CONTROL,
   DASH_COOLDOWN,
   DASH_SPEED,
+  FUEL_DRAIN,
+  FUEL_RECHARGE,
   GRAVITY,
   GROUND_ACCEL,
   GROUND_FRICTION,
+  JETPACK_ACCEL,
+  JETPACK_MAX_RISE,
   JUMP_SPEED,
   MAX_DT,
   MOVE_SPEED,
@@ -36,6 +40,7 @@ export interface MoveInput {
   yaw: number; // radians
   dash?: boolean; // edge-triggered dash request
   jump?: boolean; // edge-triggered jump request
+  thrust?: boolean; // held jump key — jetpack thrust while airborne
 }
 
 /**
@@ -45,13 +50,14 @@ export interface MoveInput {
  */
 export interface MoveState {
   pos: Vec3;
-  vel: Vec3; // horizontal velocity (y unused)
+  vel: Vec3; // x/z horizontal, y vertical (jump/gravity/jetpack)
   dashCd: number; // seconds until dash is ready
+  fuel: number; // jetpack fuel, 0..1
 }
 
 /** A fresh, stationary movement state at the given feet position. */
 export function makeMoveState(pos: Vec3): MoveState {
-  return { pos: { x: pos.x, y: pos.y, z: pos.z }, vel: { x: 0, y: 0, z: 0 }, dashCd: 0 };
+  return { pos: { x: pos.x, y: pos.y, z: pos.z }, vel: { x: 0, y: 0, z: 0 }, dashCd: 0, fuel: 1 };
 }
 
 /** Clamp a client-supplied dt to the legal range (anti speed-hack). */
@@ -83,6 +89,7 @@ export function stepMovement(
       pos: { x: state.pos.x, y: state.pos.y, z: state.pos.z },
       vel: { x: state.vel.x, y: state.vel.y, z: state.vel.z },
       dashCd: state.dashCd,
+      fuel: state.fuel,
     };
   }
 
@@ -139,6 +146,16 @@ export function stepMovement(
   if (input.jump && grounded && vel.y <= 1e-3) vel.y = JUMP_SPEED;
   vel.y -= GRAVITY * cdt;
 
+  // Jetpack: hold the jump key in the air to thrust up while fuel lasts; fuel
+  // recharges on the ground. (An ability — server-authoritative like all motion.)
+  let fuel = state.fuel ?? 1;
+  if (grounded) {
+    fuel = Math.min(1, fuel + FUEL_RECHARGE * cdt);
+  } else if (input.thrust && fuel > 0) {
+    vel.y = Math.min(vel.y + JETPACK_ACCEL * cdt, JETPACK_MAX_RISE);
+    fuel = Math.max(0, fuel - FUEL_DRAIN * cdt);
+  }
+
   // Integrate + resolve horizontal collisions at the current feet height
   // (a crate you're standing on / jumping over doesn't block you).
   const intended: Vec3 = {
@@ -161,7 +178,7 @@ export function stepMovement(
   }
   resolved.y = newY;
 
-  return { pos: resolved, vel, dashCd };
+  return { pos: resolved, vel, dashCd, fuel };
 }
 
 /**

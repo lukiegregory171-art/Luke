@@ -63,6 +63,7 @@ function harness() {
     damageFrom: vi.fn(),
     crosshairKick: vi.fn(),
     damageNumber: vi.fn(),
+    setFuel: vi.fn(),
   } as unknown as Hud;
   const sfx = {
     shoot: vi.fn(),

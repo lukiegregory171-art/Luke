@@ -111,6 +111,7 @@ export class Practice {
     const speed = Math.hypot(this.player.vel.x, this.player.vel.z);
     this.gun.update(dt, { speed, yaw: this.input.yaw, pitch: this.input.pitch });
     if (this.alive && this.input.locked) this.sfx.footsteps(dt, speed);
+    this.hud.setFuel(this.player.fuel);
   }
 
   private stepPlayer(step: number): void {
@@ -122,9 +123,10 @@ export class Practice {
     const dash = canAct && this.input.consumeDash();
     if (dash) this.sfx.dash();
     const jump = canAct && this.input.consumeJump();
+    const thrust = canAct && this.input.keys.has('Space');
     this.player = stepMovement(
       this.player,
-      { moveFwd, moveRight, yaw: this.input.yaw, dash, jump },
+      { moveFwd, moveRight, yaw: this.input.yaw, dash, jump, thrust },
       step,
       this.map,
     );

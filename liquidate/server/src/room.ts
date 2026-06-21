@@ -340,7 +340,14 @@ export class Room {
     if (p.alive && dt > 0) {
       p.move = stepMovement(
         p.move,
-        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: p.yaw, dash: msg.dash, jump: msg.jump },
+        {
+          moveFwd: msg.moveFwd,
+          moveRight: msg.moveRight,
+          yaw: p.yaw,
+          dash: msg.dash,
+          jump: msg.jump,
+          thrust: msg.thrust,
+        },
         dt,
         this.map,
       );
@@ -537,6 +544,7 @@ export class Room {
       vy: p.move.vel.y,
       vz: p.move.vel.z,
       dashCd: p.move.dashCd,
+      fuel: p.move.fuel,
       yaw: p.yaw,
       pitch: p.pitch,
       health: p.health,

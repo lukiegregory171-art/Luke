@@ -986,3 +986,29 @@ button.ghost:hover {
   content: '🔒';
   margin-left: auto;
 }
+
+/* --- Jetpack fuel meter (under the health bar) ---------------------------- */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fuel-bar {
+  width: 220px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#fuel-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--sol-gold, #e8b84b);
+  box-shadow: 0 0 8px rgba(232, 184, 75, 0.5);
+  transition: width 0.08s linear;
+}
+#fuel-fill.low {
+  background: #b06a2a;
+  box-shadow: none;
+}

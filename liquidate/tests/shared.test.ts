@@ -152,3 +152,39 @@ describe('jump + gravity + vertical collision', () => {
     expect(Math.hypot(atGround.x, atGround.z)).toBeGreaterThan(1);
   });
 });
+
+describe('jetpack ability', () => {
+  it('thrusting in the air rises (or arrests a fall) and drains fuel', () => {
+    // Jump, then hold thrust: vertical velocity trends up while fuel lasts.
+    let s = makeMoveState(v3(5, 0, 0));
+    s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0, jump: true }, STEP, FLAT);
+    const fuelAtLaunch = s.fuel;
+    let peak = s.pos.y;
+    for (let i = 0; i < 40; i++) {
+      s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0, thrust: true }, STEP, FLAT);
+      peak = Math.max(peak, s.pos.y);
+    }
+    expect(peak).toBeGreaterThan(2); // jetpack carries you higher than a plain jump (~1.7)
+    expect(s.fuel).toBeLessThan(fuelAtLaunch); // ...and it costs fuel
+  });
+
+  it('cannot thrust with an empty tank', () => {
+    let s = { ...makeMoveState(v3(5, 0, 0)), fuel: 0 };
+    s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0, jump: true }, STEP, FLAT);
+    const yAfterJump = s.pos.y;
+    // Hold thrust with no fuel: it falls back like a normal jump (no lift).
+    let peak = yAfterJump;
+    for (let i = 0; i < 60; i++) {
+      s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0, thrust: true }, STEP, FLAT);
+      peak = Math.max(peak, s.pos.y);
+    }
+    expect(peak).toBeLessThan(2); // no jetpack lift
+    expect(s.pos.y).toBe(0); // lands
+  });
+
+  it('recharges fuel on the ground', () => {
+    let s = { ...makeMoveState(v3(5, 0, 0)), fuel: 0.2 };
+    for (let i = 0; i < 60; i++) s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, FLAT);
+    expect(s.fuel).toBeGreaterThan(0.2);
+  });
+});

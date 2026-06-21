@@ -48,6 +48,7 @@ export class Hud {
   private readonly hitmarker = document.getElementById('hitmarker') as HTMLElement;
   private readonly healthFill = document.getElementById('health-fill') as HTMLElement;
   private readonly healthNum = document.getElementById('health-num') as HTMLElement;
+  private readonly fuelFill = document.getElementById('fuel-fill') as HTMLElement;
   private readonly latency = document.getElementById('latency') as HTMLElement;
   private readonly damage = document.getElementById('damage') as HTMLElement;
   private readonly bannerEl = document.getElementById('banner') as HTMLElement;
@@ -136,6 +137,13 @@ export class Hud {
     el.style.top = `calc(50% - 26px)`;
     this.dmgnums.appendChild(el);
     setTimeout(() => el.remove(), 720);
+  }
+
+  /** Jetpack fuel meter (0..1). */
+  setFuel(frac: number): void {
+    const f = Math.max(0, Math.min(1, frac));
+    this.fuelFill.style.width = `${f * 100}%`;
+    this.fuelFill.classList.toggle('low', f < 0.25);
   }
 
   /** Brief crosshair expansion on firing (recoil read). */

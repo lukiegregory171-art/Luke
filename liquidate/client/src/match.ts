@@ -212,6 +212,7 @@ export class Match {
     const selfSpeed = Math.hypot(this.predicted.vel.x, this.predicted.vel.z);
     this.weapon.update(dt, { speed: selfSpeed, yaw: this.input.yaw, pitch: this.input.pitch });
     if (this.selfAlive && this.input.locked) this.sfx.footsteps(dt, selfSpeed);
+    this.hud.setFuel(this.predicted.fuel);
     this.hud.setLatency(this.net.latency);
     // Live scoreboard while Tab is held.
     this.hud.showScoreboard(
@@ -227,6 +228,7 @@ export class Match {
     const dash = canAct && this.input.consumeDash();
     if (dash) this.sfx.dash();
     const jump = canAct && this.input.consumeJump();
+    const thrust = canAct && this.input.keys.has('Space');
 
     this.seq++;
     const msg: InputMessage = {
@@ -239,12 +241,13 @@ export class Match {
       pitch: this.input.pitch,
       dash,
       jump,
+      thrust,
     };
 
     if (this.selfAlive) {
       this.predicted = stepMovement(
         this.predicted,
-        { moveFwd, moveRight, yaw: this.input.yaw, dash, jump },
+        { moveFwd, moveRight, yaw: this.input.yaw, dash, jump, thrust },
         step,
         this.map,
       );
@@ -301,12 +304,20 @@ export class Match {
         pos: { x: self.x, y: self.y, z: self.z },
         vel: { x: self.vx, y: self.vy, z: self.vz },
         dashCd: self.dashCd,
+        fuel: self.fuel,
       };
       if (self.alive) {
         for (const i of this.pending) {
           this.predicted = stepMovement(
             this.predicted,
-            { moveFwd: i.moveFwd, moveRight: i.moveRight, yaw: i.yaw, dash: i.dash, jump: i.jump },
+            {
+              moveFwd: i.moveFwd,
+              moveRight: i.moveRight,
+              yaw: i.yaw,
+              dash: i.dash,
+              jump: i.jump,
+              thrust: i.thrust,
+            },
             i.dt,
             this.map,
           );
