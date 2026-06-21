@@ -899,3 +899,90 @@ button.ghost:hover {
 .over-board tr.me td {
   font-weight: 800;
 }
+
+/* --- Arsenal / cosmetics inventory + 3D inspect --------------------------- */
+.arsenal-btn {
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+}
+.overlay-card.inventory {
+  width: min(760px, 94vw);
+}
+.inv-body {
+  display: flex;
+  gap: 1.6rem;
+  text-align: left;
+  margin-top: 1rem;
+}
+.inv-viewport {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#inspect-canvas {
+  width: 320px;
+  height: 300px;
+  border: 1px solid rgba(22, 240, 138, 0.18);
+  border-radius: 10px;
+  background: radial-gradient(circle at 50% 40%, rgba(16, 32, 32, 0.6), #050a0b 75%);
+}
+.inv-name {
+  margin-top: 0.7rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+.inv-req {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #7c8a98;
+}
+.inv-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.inv-skins {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0.4rem 0 0.8rem;
+}
+.inv-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.inv-cell .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+.inv-cell.on {
+  border-color: var(--accent);
+}
+.inv-cell.equipped::after {
+  content: '✓';
+  margin-left: auto;
+  color: var(--accent);
+}
+.inv-cell.locked {
+  opacity: 0.5;
+}
+.inv-cell.locked::after {
+  content: '🔒';
+  margin-left: auto;
+}

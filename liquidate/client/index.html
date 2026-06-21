@@ -92,6 +92,7 @@
 
         <div class="lobby-label">SKIN</div>
         <div id="skins" class="skins"></div>
+        <button id="lobby-arsenal" class="ghost arsenal-btn">⬡ ARSENAL — INSPECT SKINS</button>
         <div id="wallet" class="wallet hidden">
           <button id="wallet-connect" class="ghost">CONNECT DEVNET WALLET</button>
           <div class="lobby-row">
@@ -158,6 +159,30 @@
         <p class="sub" id="over-detail"></p>
         <div id="over-board" class="over-board"></div>
         <button id="play-again">BACK TO LOBBY</button>
+      </div>
+
+      <!-- Arsenal / cosmetics inventory with 3D inspect -->
+      <div class="overlay-card hidden inventory" id="card-inventory">
+        <h1 class="small">ARSENAL</h1>
+        <div class="inv-body">
+          <div class="inv-viewport">
+            <canvas id="inspect-canvas"></canvas>
+            <div id="inv-name" class="inv-name">—</div>
+            <div id="inv-req" class="inv-req"></div>
+          </div>
+          <div class="inv-side">
+            <div class="lobby-label">SKINS</div>
+            <div id="inv-skins" class="inv-skins"></div>
+            <p class="footnote">
+              Skins are cosmetic-only and client-side — never sent to the server, never change how
+              an opponent looks to you. No pay-to-win.
+            </p>
+            <div class="btn-row">
+              <button id="inv-equip">EQUIP</button>
+              <button id="inv-close" class="ghost">CLOSE</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

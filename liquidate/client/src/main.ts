@@ -31,6 +31,7 @@ import { Net } from './net';
 import { Opponents } from './opponents';
 import { Impacts } from './impacts';
 import { Shake } from './shake';
+import { Inspect } from './inspect';
 import { Match, type MatchResult } from './match';
 import { Practice } from './practice';
 import { Lobby } from './lobby';
@@ -83,6 +84,7 @@ const overlay = document.getElementById('overlay') as HTMLElement;
 const cardMenu = document.getElementById('card-menu') as HTMLElement;
 const cardSearch = document.getElementById('card-search') as HTMLElement;
 const cardOver = document.getElementById('card-over') as HTMLElement;
+const cardInventory = document.getElementById('card-inventory') as HTMLElement;
 const resumeHint = document.getElementById('resume-hint') as HTMLElement;
 
 type AppState = 'lobby' | 'searching' | 'playing' | 'over';
@@ -100,7 +102,8 @@ function setState(s: AppState): void {
 
 function showCard(card: HTMLElement | null): void {
   overlay.classList.toggle('hidden', card === null);
-  for (const c of [cardMenu, cardSearch, cardOver]) c.classList.toggle('hidden', c !== card);
+  for (const c of [cardMenu, cardSearch, cardOver, cardInventory])
+    c.classList.toggle('hidden', c !== card);
 }
 
 // --- Networking dispatch ---------------------------------------------------
@@ -326,6 +329,65 @@ function renderSkins(): void {
   }
 }
 renderSkins();
+
+// --- Arsenal: cosmetics inventory + 3D inspect -----------------------------
+const inspect = new Inspect(document.getElementById('inspect-canvas') as HTMLCanvasElement);
+const invSkinsEl = document.getElementById('inv-skins') as HTMLElement;
+const invNameEl = document.getElementById('inv-name') as HTMLElement;
+const invReqEl = document.getElementById('inv-req') as HTMLElement;
+const invEquipBtn = document.getElementById('inv-equip') as HTMLButtonElement;
+let previewSkin = selectedSkin;
+
+function previewInInspect(skin: Skin): void {
+  previewSkin = skin;
+  inspect.setAccent(accentHex(skin));
+  invNameEl.textContent = skin.name;
+  const unlocked = isSkinUnlocked(skin, tokenBalance);
+  invReqEl.textContent = unlocked
+    ? skin.id === selectedSkin.id
+      ? 'EQUIPPED'
+      : 'Owned'
+    : `Locked — needs ${skin.requires} devnet token`;
+  invEquipBtn.disabled = !unlocked || skin.id === selectedSkin.id;
+  for (const el of Array.from(invSkinsEl.children) as HTMLElement[]) {
+    el.classList.toggle('on', el.dataset.id === skin.id);
+  }
+}
+
+function renderInventory(): void {
+  invSkinsEl.innerHTML = '';
+  for (const skin of SKINS) {
+    const unlocked = isSkinUnlocked(skin, tokenBalance);
+    const cell = document.createElement('button');
+    cell.className =
+      'inv-cell' + (skin.id === selectedSkin.id ? ' equipped' : '') + (unlocked ? '' : ' locked');
+    cell.dataset.id = skin.id;
+    cell.innerHTML = `<span class="dot" style="background:${skin.color}"></span>${skin.name}`;
+    cell.addEventListener('click', () => previewInInspect(skin));
+    invSkinsEl.appendChild(cell);
+  }
+  previewInInspect(previewSkin);
+}
+
+function openArsenal(): void {
+  renderInventory();
+  showCard(cardInventory);
+  inspect.start();
+  requestAnimationFrame(() => inspect.resize());
+}
+
+document.getElementById('lobby-arsenal')!.addEventListener('click', openArsenal);
+invEquipBtn.addEventListener('click', () => {
+  if (!isSkinUnlocked(previewSkin, tokenBalance)) return;
+  selectedSkin = previewSkin;
+  theme(selectedSkin);
+  renderSkins();
+  renderInventory();
+});
+document.getElementById('inv-close')!.addEventListener('click', () => {
+  inspect.stop();
+  showCard(cardMenu);
+});
 
 if (TOKEN_ENABLED) {
   const wallet = document.getElementById('wallet') as HTMLElement;
