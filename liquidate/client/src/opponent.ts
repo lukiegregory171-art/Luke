@@ -15,6 +15,7 @@ import { COLORS } from './palette';
 interface Frame {
   t: number; // server time (ms)
   x: number;
+  y: number;
   z: number;
   yaw: number;
   alive: boolean;
@@ -48,8 +49,8 @@ export class Opponent {
     return f ? { x: f.x, z: f.z } : undefined;
   }
 
-  pushFrame(serverTime: number, x: number, z: number, yaw: number, alive: boolean): void {
-    this.buffer.push({ t: serverTime, x, z, yaw, alive });
+  pushFrame(serverTime: number, x: number, y: number, z: number, yaw: number, alive: boolean): void {
+    this.buffer.push({ t: serverTime, x, y, z, yaw, alive });
     if (this.buffer.length > MAX_FRAMES) this.buffer.shift();
   }
 
@@ -76,13 +77,14 @@ export class Opponent {
     const f = span > 0 ? Math.max(0, Math.min(1, (renderTime - older.t) / span)) : 0;
 
     const x = older.x + (newer.x - older.x) * f;
+    const y = older.y + (newer.y - older.y) * f;
     const z = older.z + (newer.z - older.z) * f;
     const yaw = older.yaw + shortestAngle(older.yaw, newer.yaw) * f;
 
     // Interpolated server speed (m/s) drives the walk cadence.
     const speed = span > 0 ? Math.hypot(newer.x - older.x, newer.z - older.z) / (span / 1000) : 0;
 
-    this.character.place(x, z, yaw);
+    this.character.place(x, y, z, yaw);
     this.character.setAlive(newer.alive);
     this.character.update(dt, speed);
   }

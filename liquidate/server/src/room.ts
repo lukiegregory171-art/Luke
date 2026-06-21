@@ -272,7 +272,7 @@ export class Room {
 
   private recordHistory(now: number): void {
     for (const p of this.players) {
-      p.history.push({ t: now, x: p.move.pos.x, z: p.move.pos.z });
+      p.history.push({ t: now, x: p.move.pos.x, y: p.move.pos.y, z: p.move.pos.z });
       while (p.history.length > 1 && p.history[0].t < now - HISTORY_MS) p.history.shift();
     }
   }
@@ -331,7 +331,7 @@ export class Room {
     if (p.alive && dt > 0) {
       p.move = stepMovement(
         p.move,
-        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: p.yaw, dash: msg.dash },
+        { moveFwd: msg.moveFwd, moveRight: msg.moveRight, yaw: p.yaw, dash: msg.dash, jump: msg.jump },
         dt,
         this.map,
       );
@@ -378,7 +378,7 @@ export class Room {
       let best: { target: PlayerSim; t: number; head: boolean } | null = null;
       for (const target of targets) {
         const past = sampleHistory(target.history, viewTime);
-        const feet: Vec3 = past ? { x: past.x, y: 0, z: past.z } : target.move.pos;
+        const feet: Vec3 = past ? { x: past.x, y: past.y, z: past.z } : target.move.pos;
         const hit = hitscan(eye, rayDir, w.range, hurtboxes(feet), this.map.obstacles);
         if (hit && (!best || hit.t < best.t)) best = { target, t: hit.t, head: hit.headshot };
       }
@@ -506,6 +506,7 @@ export class Room {
       y: p.move.pos.y,
       z: p.move.pos.z,
       vx: p.move.vel.x,
+      vy: p.move.vel.y,
       vz: p.move.vel.z,
       dashCd: p.move.dashCd,
       yaw: p.yaw,

@@ -10,17 +10,24 @@
  */
 
 import {
+  AIR_CONTROL,
   DASH_COOLDOWN,
   DASH_SPEED,
+  GRAVITY,
   GROUND_ACCEL,
   GROUND_FRICTION,
+  JUMP_SPEED,
   MAX_DT,
   MOVE_SPEED,
+  PLAYER_HEIGHT,
   PLAYER_RADIUS,
   STOP_SPEED,
 } from './config';
 import type { AABB, GameMap } from './map';
 import { clamp, forwardFromYaw, normalize, rightFromYaw, type Vec3 } from './vec';
+
+/** Vertical tolerance for "standing on" a surface (and stepping onto it). */
+const STEP_TOL = 0.1;
 
 /** The movement-relevant slice of a player's input for one step. */
 export interface MoveInput {
@@ -28,6 +35,7 @@ export interface MoveInput {
   moveRight: number; // -1..1 (strafe)
   yaw: number; // radians
   dash?: boolean; // edge-triggered dash request
+  jump?: boolean; // edge-triggered jump request
 }
 
 /**
@@ -73,7 +81,7 @@ export function stepMovement(
   if (cdt === 0) {
     return {
       pos: { x: state.pos.x, y: state.pos.y, z: state.pos.z },
-      vel: { x: state.vel.x, y: 0, z: state.vel.z },
+      vel: { x: state.vel.x, y: state.vel.y, z: state.vel.z },
       dashCd: state.dashCd,
     };
   }
@@ -89,11 +97,15 @@ export function stepMovement(
   });
   const wishLen = Math.hypot(wish.x, wish.z); // 0 (idle) or 1
 
-  const vel: Vec3 = { x: state.vel.x, y: 0, z: state.vel.z };
+  const vel: Vec3 = { x: state.vel.x, y: state.vel.y, z: state.vel.z };
 
-  // Friction.
+  // Standing on the floor or a crate top? (Drives friction + jump eligibility.)
+  const supportBefore = supportHeight(state.pos.x, state.pos.z, state.pos.y, map);
+  const grounded = state.pos.y <= supportBefore + STEP_TOL;
+
+  // Friction only bites on the ground; in the air you keep your momentum.
   const speed = Math.hypot(vel.x, vel.z);
-  if (speed > 0) {
+  if (speed > 0 && grounded) {
     const control = speed < STOP_SPEED ? STOP_SPEED : speed;
     const newSpeed = Math.max(0, speed - control * GROUND_FRICTION * cdt);
     const scale = newSpeed / speed;
@@ -101,12 +113,14 @@ export function stepMovement(
     vel.z *= scale;
   }
 
-  // Accelerate toward the wished direction, capped at MOVE_SPEED.
+  // Accelerate toward the wished direction, capped at MOVE_SPEED (reduced air
+  // control while airborne).
   if (wishLen > 0) {
     const current = vel.x * wish.x + vel.z * wish.z;
     const add = MOVE_SPEED - current;
     if (add > 0) {
-      const accelSpeed = Math.min(GROUND_ACCEL * cdt * MOVE_SPEED, add);
+      const accelScale = grounded ? 1 : AIR_CONTROL;
+      const accelSpeed = Math.min(GROUND_ACCEL * cdt * MOVE_SPEED * accelScale, add);
       vel.x += wish.x * accelSpeed;
       vel.z += wish.z * accelSpeed;
     }
@@ -121,36 +135,68 @@ export function stepMovement(
     dashCd = DASH_COOLDOWN;
   }
 
-  // Integrate and resolve collisions.
+  // Jump (only from the ground), then gravity.
+  if (input.jump && grounded && vel.y <= 1e-3) vel.y = JUMP_SPEED;
+  vel.y -= GRAVITY * cdt;
+
+  // Integrate + resolve horizontal collisions at the current feet height
+  // (a crate you're standing on / jumping over doesn't block you).
   const intended: Vec3 = {
     x: state.pos.x + vel.x * cdt,
     y: state.pos.y,
     z: state.pos.z + vel.z * cdt,
   };
-  const resolved = resolveCollisions(intended, map);
-
-  // If a wall pushed us back, recompute velocity from the actual displacement
-  // so we don't accumulate speed into obstacles.
+  const resolved = resolveCollisions(intended, map, state.pos.y);
   if (Math.abs(resolved.x - intended.x) > 1e-6 || Math.abs(resolved.z - intended.z) > 1e-6) {
     vel.x = (resolved.x - state.pos.x) / cdt;
     vel.z = (resolved.z - state.pos.z) / cdt;
   }
 
+  // Vertical integrate + land on the highest support under the new position.
+  let newY = state.pos.y + vel.y * cdt;
+  const support = supportHeight(resolved.x, resolved.z, state.pos.y, map);
+  if (newY <= support) {
+    newY = support;
+    vel.y = 0;
+  }
+  resolved.y = newY;
+
   return { pos: resolved, vel, dashCd };
 }
 
 /**
- * Push a circle (player) out of the arena walls and every obstacle box.
- * Runs a couple of passes so resolving one box doesn't shove the player into
- * another.
+ * Highest surface the player can stand on at (x,z): the floor (0) or the top of
+ * any crate whose footprint the player's circle overlaps and whose top is at or
+ * below the feet (within STEP_TOL — so you stand on / step onto it, but don't
+ * snap up the side of a tall box you walked into).
  */
-export function resolveCollisions(pos: Vec3, map: GameMap): Vec3 {
+export function supportHeight(x: number, z: number, feetY: number, map: GameMap): number {
+  let h = 0;
+  for (const box of map.obstacles) {
+    if (box.max.y <= feetY + STEP_TOL && box.max.y > h) {
+      const cx = clamp(x, box.min.x, box.max.x);
+      const cz = clamp(z, box.min.z, box.max.z);
+      const dx = x - cx;
+      const dz = z - cz;
+      if (dx * dx + dz * dz <= PLAYER_RADIUS * PLAYER_RADIUS) h = box.max.y;
+    }
+  }
+  return h;
+}
+
+/**
+ * Push a circle (player) out of the arena walls and every obstacle box whose
+ * height the player's body actually overlaps. Runs a couple of passes so
+ * resolving one box doesn't shove the player into another. `feetY` is the
+ * player's feet height (a box you're standing on / jumping over won't block).
+ */
+export function resolveCollisions(pos: Vec3, map: GameMap, feetY = pos.y): Vec3 {
   let p: Vec3 = { x: pos.x, y: pos.y, z: pos.z };
 
   for (let pass = 0; pass < 2; pass++) {
     p = clampToArena(p, map);
     for (const box of map.obstacles) {
-      p = pushOutOfBox(p, box);
+      p = pushOutOfBox(p, box, feetY);
     }
   }
   return p;
@@ -172,7 +218,12 @@ export function clampToArena(pos: Vec3, map: GameMap): Vec3 {
  * the box, push it out along the shortest axis (closest-point method, which
  * also handles the corner case correctly).
  */
-function pushOutOfBox(pos: Vec3, box: AABB): Vec3 {
+function pushOutOfBox(pos: Vec3, box: AABB, feetY: number): Vec3 {
+  // Height-aware: a box only blocks horizontally if the player's vertical span
+  // [feetY, feetY+PLAYER_HEIGHT] overlaps the box's [min.y, max.y]. Standing on
+  // top (feetY >= max.y) or below it leaves you free to move.
+  if (feetY >= box.max.y - STEP_TOL || feetY + PLAYER_HEIGHT <= box.min.y) return pos;
+
   // Closest point on the box (in X/Z) to the circle centre.
   const cx = clamp(pos.x, box.min.x, box.max.x);
   const cz = clamp(pos.z, box.min.z, box.max.z);

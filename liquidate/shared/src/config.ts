@@ -40,6 +40,11 @@ export const DASH_SPEED = 20; // burst speed of a dash
 export const DASH_COOLDOWN = 1.6; // seconds between dashes
 export const WEAPON_SWITCH_TIME = 0.35; // brief delay after swapping weapons
 
+// --- Vertical movement (jump + gravity; shared by prediction + authority) ---
+export const GRAVITY = 24; // units/s^2 pulling players down
+export const JUMP_SPEED = 9; // upward launch velocity (~1.7u peak — clears a crate)
+export const AIR_CONTROL = 0.45; // fraction of ground accel usable while airborne
+
 // --- Hitboxes (spheres relative to feet position) --------------------------
 // Used by server-side hit detection. Body covers the torso, head sits on top.
 export const BODY_SPHERE = { centerY: 1.0, radius: 0.45 };

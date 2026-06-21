@@ -28,6 +28,7 @@ export interface InputMessage {
   yaw: number; // radians
   pitch: number; // radians
   dash?: boolean; // edge-triggered dash request
+  jump?: boolean; // edge-triggered jump request
 }
 
 export interface FireMessage {
@@ -138,6 +139,7 @@ export interface PlayerSnapshot {
   y: number;
   z: number;
   vx: number; // horizontal velocity (for client reconciliation)
+  vy: number; // vertical velocity (jump/gravity reconciliation)
   vz: number;
   dashCd: number; // dash cooldown remaining (for client reconciliation)
   yaw: number;

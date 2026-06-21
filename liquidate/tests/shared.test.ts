@@ -11,7 +11,25 @@ import {
   resolveCollisions,
   stepMovement,
   v3,
+  type GameMap,
 } from '@liquidate/shared';
+
+const STEP = 1 / 60;
+const FLAT: GameMap = {
+  id: 'flat',
+  name: 'Flat',
+  width: 40,
+  depth: 40,
+  wallHeight: 4,
+  obstacles: [],
+  spawns: [
+    { pos: { x: 0, y: 0, z: 0 }, yaw: 0 },
+    { pos: { x: 0, y: 0, z: 1 }, yaw: 0 },
+  ],
+};
+// A 2.5×2.5 crate, 1.4 tall, centred at origin.
+const CRATE = { min: { x: -1.25, y: 0, z: -1.25 }, max: { x: 1.25, y: 1.4, z: 1.25 } };
+const WITH_CRATE: GameMap = { ...FLAT, obstacles: [CRATE] };
 
 describe('vec math', () => {
   it('adds vectors componentwise', () => {
@@ -91,5 +109,46 @@ describe('movement + collision', () => {
     const insideX = resolved.x > firstBox.min.x && resolved.x < firstBox.max.x;
     const insideZ = resolved.z > firstBox.min.z && resolved.z < firstBox.max.z;
     expect(insideX && insideZ).toBe(false);
+  });
+});
+
+describe('jump + gravity + vertical collision', () => {
+  it('jumps off the ground and gravity returns it', () => {
+    let s = makeMoveState(v3(5, 0, 0)); // away from any crate
+    s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0, jump: true }, STEP, FLAT);
+    expect(s.pos.y).toBeGreaterThan(0); // left the ground
+    expect(s.vel.y).toBeGreaterThan(0); // rising
+
+    let peak = s.pos.y;
+    for (let i = 0; i < 120; i++) {
+      s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, FLAT);
+      peak = Math.max(peak, s.pos.y);
+    }
+    expect(peak).toBeGreaterThan(1.2); // clears a crate's height
+    expect(s.pos.y).toBe(0); // ...and lands back on the floor
+  });
+
+  it('stays grounded under gravity when standing still', () => {
+    let s = makeMoveState(v3(5, 0, 0));
+    for (let i = 0; i < 30; i++) s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, FLAT);
+    expect(s.pos.y).toBe(0);
+    expect(s.vel.y).toBe(0);
+  });
+
+  it('lands on top of a crate instead of falling through', () => {
+    let s = makeMoveState(v3(0, 3, 0)); // dropped above the crate
+    for (let i = 0; i < 120; i++) s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, WITH_CRATE);
+    expect(s.pos.y).toBeCloseTo(1.4, 2); // rests on the crate top
+    expect(s.vel.y).toBe(0);
+  });
+
+  it('does not push you off a crate you are standing on, but blocks at ground level', () => {
+    // Standing on top (feet at the crate top): not pushed horizontally.
+    const onTop = resolveCollisions(v3(0, 1.4, 0), WITH_CRATE, 1.4);
+    expect(onTop.x).toBe(0);
+    expect(onTop.z).toBe(0);
+    // At ground level the same crate ejects you out of its footprint.
+    const atGround = resolveCollisions(v3(0, 0, 0), WITH_CRATE, 0);
+    expect(Math.hypot(atGround.x, atGround.z)).toBeGreaterThan(1);
   });
 });

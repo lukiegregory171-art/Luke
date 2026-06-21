@@ -13,13 +13,21 @@ export class Opponents {
   constructor(private readonly scene: THREE.Scene) {}
 
   /** Buffer an authoritative frame for a player id (creating its avatar). */
-  pushFrame(id: string, serverTime: number, x: number, z: number, yaw: number, alive: boolean): void {
+  pushFrame(
+    id: string,
+    serverTime: number,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    alive: boolean,
+  ): void {
     let o = this.byId.get(id);
     if (!o) {
       o = new Opponent(this.scene);
       this.byId.set(id, o);
     }
-    o.pushFrame(serverTime, x, z, yaw, alive);
+    o.pushFrame(serverTime, x, y, z, yaw, alive);
   }
 
   /** Drop any avatars whose ids are no longer present (left the match). */

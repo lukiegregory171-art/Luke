@@ -13,6 +13,7 @@
 export interface HistorySample {
   t: number; // server time (ms)
   x: number;
+  y: number; // feet height (players can stand on crates / be airborne)
   z: number;
 }
 
@@ -20,12 +21,13 @@ export interface HistorySample {
 export function sampleHistory(
   history: HistorySample[],
   time: number,
-): { x: number; z: number } | null {
+): { x: number; y: number; z: number } | null {
   const n = history.length;
   if (n === 0) return null;
-  if (time <= history[0].t) return { x: history[0].x, z: history[0].z };
+  const first = history[0];
+  if (time <= first.t) return { x: first.x, y: first.y, z: first.z };
   const last = history[n - 1];
-  if (time >= last.t) return { x: last.x, z: last.z };
+  if (time >= last.t) return { x: last.x, y: last.y, z: last.z };
 
   for (let i = 0; i < n - 1; i++) {
     const a = history[i];
@@ -33,8 +35,8 @@ export function sampleHistory(
     if (a.t <= time && time <= b.t) {
       const span = b.t - a.t || 1;
       const f = (time - a.t) / span;
-      return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f };
+      return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f };
     }
   }
-  return { x: last.x, z: last.z };
+  return { x: last.x, y: last.y, z: last.z };
 }

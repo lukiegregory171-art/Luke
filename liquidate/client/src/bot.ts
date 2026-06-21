@@ -175,7 +175,7 @@ export class Bot {
   /** Place + animate the cosmetic character from the bot's authoritative state. */
   private renderAvatar(dt: number): void {
     const speed = Math.hypot(this.move.vel.x, this.move.vel.z);
-    this.character.place(this.move.pos.x, this.move.pos.z, this.yaw);
+    this.character.place(this.move.pos.x, this.move.pos.y, this.move.pos.z, this.yaw);
     this.character.update(dt, speed);
   }
 }

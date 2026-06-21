@@ -221,6 +221,7 @@ export class Match {
     const moveRight = canAct ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
     const dash = canAct && this.input.consumeDash();
     if (dash) this.sfx.dash();
+    const jump = canAct && this.input.consumeJump();
 
     this.seq++;
     const msg: InputMessage = {
@@ -232,12 +233,13 @@ export class Match {
       yaw: this.input.yaw,
       pitch: this.input.pitch,
       dash,
+      jump,
     };
 
     if (this.selfAlive) {
       this.predicted = stepMovement(
         this.predicted,
-        { moveFwd, moveRight, yaw: this.input.yaw, dash },
+        { moveFwd, moveRight, yaw: this.input.yaw, dash, jump },
         step,
         this.map,
       );
@@ -292,14 +294,14 @@ export class Match {
       this.pending = this.pending.filter((i) => i.seq > acked);
       this.predicted = {
         pos: { x: self.x, y: self.y, z: self.z },
-        vel: { x: self.vx, y: 0, z: self.vz },
+        vel: { x: self.vx, y: self.vy, z: self.vz },
         dashCd: self.dashCd,
       };
       if (self.alive) {
         for (const i of this.pending) {
           this.predicted = stepMovement(
             this.predicted,
-            { moveFwd: i.moveFwd, moveRight: i.moveRight, yaw: i.yaw, dash: i.dash },
+            { moveFwd: i.moveFwd, moveRight: i.moveRight, yaw: i.yaw, dash: i.dash, jump: i.jump },
             i.dt,
             this.map,
           );
@@ -325,7 +327,7 @@ export class Match {
     for (const p of msg.players) {
       if (p.id === this.selfId) continue;
       present.add(p.id);
-      this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.z, p.yaw, p.alive);
+      this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.y, p.z, p.yaw, p.alive);
       if (p.score > leader) leader = p.score;
     }
     this.opponents.retainOnly(present);

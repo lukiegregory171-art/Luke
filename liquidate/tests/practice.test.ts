@@ -42,6 +42,7 @@ function harness() {
     onReload: () => {},
     onSwitch: () => {},
     consumeDash: () => false,
+    consumeJump: () => false,
   } as unknown as Input;
   const gun = {
     fire: vi.fn(),

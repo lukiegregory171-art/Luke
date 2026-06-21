@@ -18,6 +18,7 @@ export class Input {
 
   readonly keys = new Set<string>();
   private dashQueued = false;
+  private jumpQueued = false;
 
   onReload: () => void = () => {};
   onSwitch: (weapon: WeaponId) => void = () => {};
@@ -72,7 +73,8 @@ export class Input {
     this.keys.add(e.code);
     if (!fresh) return; // ignore auto-repeat for edge-triggered actions
     if (e.code === 'KeyR') this.onReload();
-    else if (e.code === 'Space') this.dashQueued = true;
+    else if (e.code === 'Space') this.jumpQueued = true;
+    else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.dashQueued = true;
     else if (e.code.startsWith('Digit')) {
       const id = WEAPON_IDS[Number(e.code.slice(5)) - 1];
       if (id) this.onSwitch(id);
@@ -89,5 +91,12 @@ export class Input {
     const d = this.dashQueued;
     this.dashQueued = false;
     return d;
+  }
+
+  /** Returns true once after a jump key press (edge-triggered). */
+  consumeJump(): boolean {
+    const j = this.jumpQueued;
+    this.jumpQueued = false;
+    return j;
   }
 }

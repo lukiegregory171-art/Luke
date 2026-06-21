@@ -10,19 +10,27 @@ import { ASSAULT, aimAngles, hitscan, hurtboxes, sampleHistory, sub, v3 } from '
 
 describe('sampleHistory', () => {
   const history = [
-    { t: 1000, x: 0, z: 0 },
-    { t: 1100, x: 2, z: 0 },
-    { t: 1200, x: 4, z: 0 },
+    { t: 1000, x: 0, y: 0, z: 0 },
+    { t: 1100, x: 2, y: 0, z: 0 },
+    { t: 1200, x: 4, y: 0, z: 0 },
   ];
 
   it('interpolates between samples', () => {
-    expect(sampleHistory(history, 1050)).toEqual({ x: 1, z: 0 });
-    expect(sampleHistory(history, 1150)).toEqual({ x: 3, z: 0 });
+    expect(sampleHistory(history, 1050)).toEqual({ x: 1, y: 0, z: 0 });
+    expect(sampleHistory(history, 1150)).toEqual({ x: 3, y: 0, z: 0 });
   });
 
   it('clamps to the ends', () => {
-    expect(sampleHistory(history, 500)).toEqual({ x: 0, z: 0 });
-    expect(sampleHistory(history, 9999)).toEqual({ x: 4, z: 0 });
+    expect(sampleHistory(history, 500)).toEqual({ x: 0, y: 0, z: 0 });
+    expect(sampleHistory(history, 9999)).toEqual({ x: 4, y: 0, z: 0 });
+  });
+
+  it('interpolates feet height (for jumpers / crate-standers)', () => {
+    const vh = [
+      { t: 0, x: 0, y: 0, z: 0 },
+      { t: 100, x: 0, y: 1.4, z: 0 },
+    ];
+    expect(sampleHistory(vh, 50)!.y).toBeCloseTo(0.7);
   });
 
   it('returns null for empty history', () => {
@@ -35,8 +43,8 @@ describe('favor-the-shooter rewind', () => {
   // past, at x = 0, and aims there. The present target is at x = 3.
   const now = 2000;
   const history = [
-    { t: now - 150, x: 0, z: 10 },
-    { t: now, x: 3, z: 10 },
+    { t: now - 150, x: 0, y: 0, z: 10 },
+    { t: now, x: 3, y: 0, z: 10 },
   ];
   const eye = v3(0, 1.6, 0);
   const aimAtPast = aimAngles(sub({ x: 0, y: 1.65, z: 10 }, eye)); // aim where it was

@@ -115,8 +115,8 @@ export class Character {
   }
 
   /** Place the root at the authoritative feet position + facing (no animation). */
-  place(x: number, z: number, yaw: number): void {
-    this.root.position.set(x, 0, z);
+  place(x: number, y: number, z: number, yaw: number): void {
+    this.root.position.set(x, y, z);
     this.root.rotation.y = yaw;
   }
 

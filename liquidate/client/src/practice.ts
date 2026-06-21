@@ -121,9 +121,10 @@ export class Practice {
     const moveRight = canAct ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
     const dash = canAct && this.input.consumeDash();
     if (dash) this.sfx.dash();
+    const jump = canAct && this.input.consumeJump();
     this.player = stepMovement(
       this.player,
-      { moveFwd, moveRight, yaw: this.input.yaw, dash },
+      { moveFwd, moveRight, yaw: this.input.yaw, dash, jump },
       step,
       this.map,
     );

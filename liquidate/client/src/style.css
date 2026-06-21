@@ -878,3 +878,8 @@ button.ghost:hover {
 #weprack .wr.on b {
   color: var(--accent);
 }
+
+.footnote.controls {
+  color: #6b7a89;
+  letter-spacing: 0.08em;
+}
