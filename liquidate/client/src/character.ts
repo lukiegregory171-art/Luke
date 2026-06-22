@@ -23,11 +23,11 @@
 
 import * as THREE from 'three';
 import { HEAD_SPHERE, MOVE_SPEED } from '@liquidate/shared';
-import { matte, neon } from './palette';
+import { matte, solid } from './palette';
 
 export interface CharacterColors {
-  body: number; // dark matte body
-  team: number; // bright emissive team colour (visor + chest + ground ring)
+  body: number; // dark accent for the visor (facing read)
+  team: number; // bright SOLID team colour — the whole body
 }
 
 const HIP_Y = 0.92; // leg pivot height
@@ -68,34 +68,37 @@ export class Character {
     private readonly scene: THREE.Scene,
     colors: CharacterColors,
   ) {
-    // ARTBIBLE: dark matte body, bright team-colour emissive accents. Low-poly
-    // flat-shaded so the silhouette reads; the team glow is what you track.
-    const bodyMat = matte(colors.body);
-    const teamMat = neon(colors.team, 2.4); // shared by visor + chest + ground ring
+    // ARTBIBLE (bright arcade): a chunky blocky humanoid in ONE bold SOLID team
+    // colour — a big readable silhouette you can read at a glance — with a dark
+    // visor that shows which way they face and a white chest plate for contrast.
+    const teamMat = solid(colors.team, 0.3); // the whole body
+    const visorMat = matte(colors.body); // dark visor (facing read)
+    const emblemMat = matte(0xfdfdfd); // white chest plate
     this.teamMat = teamMat;
-    this.mats.push(bodyMat, teamMat);
+    this.mats.push(teamMat, visorMat, emblemMat);
 
-    // Torso (chest tapering to waist), centred on the body hurtsphere height.
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.62, 8), bodyMat);
+    // Torso — a chunky block centred on the body hurtsphere height.
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.64, 0.34), teamMat);
     torso.position.y = 1.18;
     torso.castShadow = true;
     torso.name = 'torso';
-    // Emissive chest plate (front-facing team glow).
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.06), teamMat);
-    chest.position.set(0, 1.22, -0.21);
+    // White chest plate (front-facing contrast).
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.06), emblemMat);
+    chest.position.set(0, 1.24, -0.2);
 
-    // Head (dark) + forward visor (team glow — reads which way they face).
-    const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_SPHERE.radius, 8, 6), bodyMat);
+    // Blocky head + forward visor (reads which way they face).
+    const hs = HEAD_SPHERE.radius * 1.7;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(hs, hs, hs), teamMat);
     head.position.y = HEAD_SPHERE.centerY;
     head.castShadow = true;
     head.name = 'head';
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.05), teamMat);
-    visor.position.set(0, HEAD_SPHERE.centerY, -HEAD_SPHERE.radius);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(hs * 0.82, 0.1, 0.06), visorMat);
+    visor.position.set(0, HEAD_SPHERE.centerY + 0.02, -hs / 2);
 
-    this.legL = makeLimb(LEG_LEN, 0.16, 0.18, bodyMat, HIP_Y, -0.13);
-    this.legR = makeLimb(LEG_LEN, 0.16, 0.18, bodyMat, HIP_Y, 0.13);
-    this.armL = makeLimb(ARM_LEN, 0.12, 0.13, bodyMat, SHOULDER_Y, -0.3);
-    this.armR = makeLimb(ARM_LEN, 0.12, 0.13, bodyMat, SHOULDER_Y, 0.3);
+    this.legL = makeLimb(LEG_LEN, 0.18, 0.2, teamMat, HIP_Y, -0.13);
+    this.legR = makeLimb(LEG_LEN, 0.18, 0.2, teamMat, HIP_Y, 0.13);
+    this.armL = makeLimb(ARM_LEN, 0.14, 0.15, teamMat, SHOULDER_Y, -0.31);
+    this.armR = makeLimb(ARM_LEN, 0.14, 0.15, teamMat, SHOULDER_Y, 0.31);
     this.legL.name = 'legL';
     this.legR.name = 'legR';
     this.armL.name = 'armL';
@@ -116,9 +119,10 @@ export class Character {
     this.scene.add(this.root);
   }
 
-  /** Recolor the team accents (visor/chest/ground ring) — e.g. ally vs enemy. */
+  /** Recolor the whole body to a team colour — e.g. ally (green) vs enemy (red). */
   setTeam(color: number): void {
-    this.teamMat.emissive.setHex(color); // neon glow is the team colour
+    this.teamMat.color.setHex(color);
+    this.teamMat.emissive.setHex(color); // keep the slight self-illumination in step
   }
 
   /** Place the root at the authoritative feet position + facing (no animation). */

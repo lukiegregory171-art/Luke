@@ -1,8 +1,8 @@
 /**
- * Environment art (P5). Per-map mood (fog + base material colours) plus a layer
- * of decorative "dressing" that makes the box read as a real arena: an upper
- * wall band, an emissive accent trim, a ceiling with light strips, corner
- * pylons, and floor markings.
+ * Environment art (P5). Per-map theme (bright surface colours + an accent) plus a
+ * layer of decorative "dressing" that makes the box read as a real arcade arena:
+ * a stylised upper boundary band, an accent trim along the wall tops, corner
+ * pylons, and flat floor markings — all open to the bright sky.
  *
  * Client-only presentation, and it deliberately preserves "what you see is what
  * you collide with": NONE of this dressing is a collider (collision is only
@@ -15,40 +15,43 @@
 
 import * as THREE from 'three';
 import type { GameMap } from '@liquidate/shared';
+import { matte, solid } from './palette';
 
 export interface EnvTheme {
-  fog: number;
+  fog: number; // pale, airy distance fog
   fogNear: number;
   fogFar: number;
-  floor: number;
-  wall: number;
-  obstacle: number;
+  floor: number; // bright floor colour
+  grid: number; // subtle floor-grid line colour
+  wall: number; // light wall colour
+  obstacle: number; // solid accent-coloured cover blocks
 }
 
-// Locked palette (ARTBIBLE.md): dark desaturated env so neon/players POP.
+// Bright arcade default (ARTBIBLE.md): light surfaces, bold accent cover.
 export const DEFAULT_ENV: EnvTheme = {
-  fog: 0x070b0c,
-  fogNear: 18,
-  fogFar: 60,
-  floor: 0x0b1112,
-  wall: 0x0e1719,
-  obstacle: 0x14201e,
+  fog: 0xeaf6fb,
+  fogNear: 40,
+  fogFar: 160,
+  floor: 0xe4e8ea,
+  grid: 0xbcc6cb,
+  wall: 0xd5dde0,
+  obstacle: 0x4fc3f7, // sky blue
 };
 
-/** Per-map identity is a subtle fog tint; floor/wall/crate stay locked. */
+/** Each map gets a distinct bright theme (floor tint + accent cover colour). */
 export const ENV_THEMES: Record<string, EnvTheme> = {
-  crossfire: DEFAULT_ENV,
-  refinery: { ...DEFAULT_ENV, fog: 0x0a0c0a }, // faint warm
-  vault: { ...DEFAULT_ENV, fog: 0x0a0710 }, // faint violet
-  datacenter: { ...DEFAULT_ENV, fog: 0x070d10 }, // faint cyan
-  tradingfloor: { ...DEFAULT_ENV, fog: 0x0c0a07 }, // faint gold
+  crossfire: DEFAULT_ENV, // clean sky-blue
+  refinery: { ...DEFAULT_ENV, floor: 0xeae3d2, grid: 0xcfc6ad, wall: 0xe0d8c6, obstacle: 0xff8a5c }, // warm sand + coral
+  vault: { ...DEFAULT_ENV, floor: 0xece6d6, grid: 0xd2c9a8, wall: 0xe6dcc2, obstacle: 0xe8b84b }, // gold vault
+  datacenter: { ...DEFAULT_ENV, floor: 0xe6ecf0, grid: 0xb8c6cf, wall: 0xd2dde4, obstacle: 0x4fc3f7 }, // cool blue
+  tradingfloor: { ...DEFAULT_ENV, floor: 0xe6ece6, grid: 0xbecbbe, wall: 0xd6e0d6, obstacle: 0x7cc96b }, // green floor
 };
 
 export function envTheme(map: GameMap): EnvTheme {
   return ENV_THEMES[map.id] ?? DEFAULT_ENV;
 }
 
-const ACCENT = 0x16f08a; // locked brand green; World.setAccent retints these
+const ACCENT = 0x2bd96b; // brand green; World.setAccent retints these
 
 /**
  * Build the decorative dressing for a map. Returns the group to add to the
@@ -65,7 +68,6 @@ export function buildDressing(
   const wallH = map.wallHeight;
   const t = 0.4;
   const upperH = 3.2;
-  const topY = wallH + upperH;
 
   const perimeter: [number, number, number, number][] = [
     [0, -halfD, map.width, t],
@@ -74,87 +76,54 @@ export function buildDressing(
     [halfW, 0, t, map.depth],
   ];
 
-  // Darker upper wall band — encloses the space above the (short) collidable
-  // walls. Players are ground-based and ~1.8 tall, so this is never reachable.
-  const bandMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(theme.wall).multiplyScalar(0.55),
-    metalness: 0.15,
-    roughness: 0.85,
-  });
+  // Stylised upper boundary band — a brighter extension of the (short)
+  // collidable walls, open to the sky. Players are ground-based and ~1.8 tall,
+  // so this is never reachable and never cover.
+  const bandMat = matte(new THREE.Color(theme.wall).offsetHSL(0, 0, 0.04).getHex());
   for (const [cx, cz, sx, sz] of perimeter) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, upperH, sz), bandMat);
     m.position.set(cx, wallH + upperH / 2, cz);
     group.add(m);
   }
 
-  // Emissive accent trim at the wall top (blooms; retintable by the skin).
-  const trimMat = new THREE.MeshStandardMaterial({
-    color: ACCENT,
-    emissive: ACCENT,
-    emissiveIntensity: 1.4,
-    roughness: 0.4,
-  });
+  // Solid accent trim at the wall top (retintable by the skin).
+  const trimMat = solid(ACCENT, 0.3);
   accentMats.push(trimMat);
-  const trimH = 0.12;
+  const trimH = 0.16;
   for (const [cx, cz, sx, sz] of perimeter) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(sx + 0.02, trimH, sz + 0.02), trimMat);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx + 0.04, trimH, sz + 0.04), trimMat);
     m.position.set(cx, wallH + trimH / 2, cz);
     group.add(m);
   }
 
-  // Ceiling slab + warm light strips (fixed warm fixtures, not skin-tinted).
-  const ceilMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(theme.wall).multiplyScalar(0.4),
-    roughness: 0.95,
-    side: THREE.DoubleSide,
-  });
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(map.width, map.depth), ceilMat);
-  ceiling.rotation.x = Math.PI / 2; // face down
-  ceiling.position.y = topY;
-  group.add(ceiling);
-
-  const stripMat = new THREE.MeshBasicMaterial({ color: 0xfff0d0 });
-  const strips = 3;
-  for (let i = 0; i < strips; i++) {
-    const z = -halfD * 0.55 + (i / (strips - 1)) * halfD * 1.1;
-    const strip = new THREE.Mesh(new THREE.PlaneGeometry(map.width * 0.5, 0.4), stripMat);
-    strip.rotation.x = Math.PI / 2;
-    strip.position.set(0, topY - 0.02, z);
-    group.add(strip);
-  }
-
-  // Corner pylons: thin emissive verticals flush in the corners (architectural,
+  // Corner pylons: chunky accent verticals flush in the corners (architectural,
   // at the perimeter — never mistakable as interior cover).
-  const pylonMat = new THREE.MeshStandardMaterial({
-    color: ACCENT,
-    emissive: ACCENT,
-    emissiveIntensity: 1.0,
-    roughness: 0.5,
-  });
+  const pylonMat = solid(ACCENT, 0.28);
   accentMats.push(pylonMat);
-  const px = 0.18;
+  const px = 0.3;
+  const pylonH = wallH + upperH;
   const corners: [number, number][] = [
-    [-halfW + px, -halfD + px],
-    [halfW - px, -halfD + px],
-    [-halfW + px, halfD - px],
-    [halfW - px, halfD - px],
+    [-halfW + px / 2, -halfD + px / 2],
+    [halfW - px / 2, -halfD + px / 2],
+    [-halfW + px / 2, halfD - px / 2],
+    [halfW - px / 2, halfD - px / 2],
   ];
   for (const [cx, cz] of corners) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(px, topY, px), pylonMat);
-    p.position.set(cx, topY / 2, cz);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(px, pylonH, px), pylonMat);
+    p.position.set(cx, pylonH / 2, cz);
     group.add(p);
   }
 
   // Floor markings: a centre ring + spawn pads. Flat decals just above the
   // floor — clearly not cover.
-  const ringMat = new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.5 });
+  const ringMat = new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.55 });
   accentMats.push(ringMat);
   const ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 1.9, 48), ringMat);
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.03;
   group.add(ring);
 
-  const padMat = new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.18 });
+  const padMat = new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.22 });
   accentMats.push(padMat);
   for (const s of map.spawns) {
     const pad = new THREE.Mesh(new THREE.CircleGeometry(1.6, 32), padMat);

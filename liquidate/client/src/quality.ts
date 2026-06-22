@@ -11,57 +11,39 @@ export interface QualitySettings {
   maxPixelRatio: number; // cap on devicePixelRatio
   shadows: boolean;
   shadowMapSize: number;
-  ssao: boolean;
-  bloom: boolean;
-  smaa: boolean;
-  vignette: boolean;
-  grain: boolean;
+  smaa: boolean; // light anti-aliasing (MSAA samples on the render target)
   dynamicResolution: boolean; // auto-scale render res to hold frame rate
 }
 
+// The bright arcade pipeline is intentionally lean — no bloom/SSAO/vignette/grain.
+// Presets only scale render resolution, shadows, and anti-aliasing.
 export const QUALITY: Record<QualityLevel, QualitySettings> = {
   low: {
     maxPixelRatio: 1,
     shadows: false,
     shadowMapSize: 512,
-    ssao: false,
-    bloom: true,
     smaa: false,
-    vignette: false,
-    grain: false,
     dynamicResolution: true,
   },
   medium: {
     maxPixelRatio: 1.5,
     shadows: true,
     shadowMapSize: 1024,
-    ssao: false,
-    bloom: true,
     smaa: true,
-    vignette: true,
-    grain: false,
     dynamicResolution: true,
   },
   high: {
     maxPixelRatio: 2,
     shadows: true,
     shadowMapSize: 2048,
-    ssao: true,
-    bloom: true,
     smaa: true,
-    vignette: true,
-    grain: true,
     dynamicResolution: true,
   },
   ultra: {
     maxPixelRatio: 2,
     shadows: true,
     shadowMapSize: 4096,
-    ssao: true,
-    bloom: true,
     smaa: true,
-    vignette: true,
-    grain: true,
     dynamicResolution: false,
   },
 };

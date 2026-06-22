@@ -12,8 +12,10 @@ layer. Two real players duel; the server decides everything.
 
 The full product brief lives in **`MASTER_BUILD.md`**; the **locked** visual look
 lives in **`ARTBIBLE.md`** (the art bible wins any look dispute). Read both before
-visual or content work. The bar is **Krunker-tier** stylized look/feel on a
-Three.js + Node stack (not realistic Unity/Unreal), shipped as a lean online
+visual or content work. The look is **BRIGHT, FLAT, CLEAN, COLOURFUL ARCADE**
+(Krunker / 1v1.lol): bright daylight, chunky blocky low-poly geometry, bold solid
+colours, minimal post-processing (no bloom), crisp and very readable, on a
+Three.js + Node stack (not realistic Unity/Unreal). Shipped as a lean online
 vertical slice first, then expanded data-driven.
 
 **Roadmap (build → test → STOP each milestone):**
@@ -22,9 +24,11 @@ vertical slice first, then expanded data-driven.
   tooling, WebSocket, passing vitest, self-documenting docs.
 - **M1 — Authoritative core.** ✅ Prediction/reconciliation, interpolation,
   server hitscan + occlusion, kills/respawn/winner, forfeit; integration green.
-- **M2 — Stylized pass.** ✅ `ARTBIBLE.md` look: flat/toon, locked palette, the
-  **UnrealBloom signature**, procedural low-poly character + viewmodel, loading
-  screen. (144fps @1080p target; CC0 art is a drop-in via the P1 AssetManager.)
+- **M2 — Stylized pass.** ✅ `ARTBIBLE.md` look: **bright flat arcade** — chunky
+  low-poly geometry in bold solid colours, bright daytime rig (hemisphere + warm
+  sun, soft shadows, gradient sky), **minimal post (no bloom)**, procedural
+  low-poly character + viewmodel, loading screen. (144fps @1080p target; CC0 art
+  is a drop-in via the P1 AssetManager.)
 - **M3 — Feel + slice content.** ✅ Arcade feel + juice, **3 data-driven
   weapons** (assault/SMG/sniper), 3 maps, **server bots fill lobbies**, **FFA
   (up to 6) + 1v1**.

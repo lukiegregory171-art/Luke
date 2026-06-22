@@ -32,7 +32,8 @@ interface Tracer {
 const TRACER_LIFE = 0.07;
 const TRACER_PREWARM = 24; // covers a shotgun blast + overlapping rifle fire
 const UP = new THREE.Vector3(0, 1, 0);
-const ACCENT_DEFAULT = 0x16e0a3;
+const ACCENT_DEFAULT = 0x2bd96b; // bright brand green
+const GUN_BODY = 0x3a4754; // blocky slate weapon body
 const TRACER_BASE = 0xbafff0;
 const WHITE = new THREE.Color(0xffffff);
 
@@ -89,20 +90,21 @@ export class Weapon {
     private readonly scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
   ) {
-    // Build a simple rifle out of a few boxes, parented to the camera (ARTBIBLE:
-    // low-poly matte body + emissive neon accent).
+    // Build a simple blocky rifle out of a few boxes, parented to the camera
+    // (ARTBIBLE bright arcade: low-poly slate body + a bold SOLID accent — no
+    // neon glow).
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x0c1413,
+      color: GUN_BODY,
       flatShading: true,
       roughness: 0.85,
-      metalness: 0.05,
+      metalness: 0,
     });
     this.accentMat = new THREE.MeshStandardMaterial({
-      color: 0x05100c,
+      color: ACCENT_DEFAULT,
       flatShading: true,
       emissive: ACCENT_DEFAULT,
-      emissiveIntensity: 2.2,
-      roughness: 0.4,
+      emissiveIntensity: 0.35,
+      roughness: 0.5,
     });
     const accentMat = this.accentMat;
 

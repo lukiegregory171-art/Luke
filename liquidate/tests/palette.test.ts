@@ -1,42 +1,47 @@
 /**
- * M2 locks the visual direction (ARTBIBLE.md). This pins the exact palette and
- * the matte/neon material recipe so the look can't silently drift, and confirms
- * the neon emissive crosses into the "blooms" range (intensity 2.2–2.6). Purely
- * cosmetic data — none of it can touch a hitbox or outcome.
+ * The restyle locks the BRIGHT ARCADE visual direction (ARTBIBLE.md). This pins
+ * the exact palette and the matte/solid material recipe so the look can't
+ * silently drift, and confirms the solid helper is a flat self-lit colour with
+ * NO bloom-range emissive (there is no bloom pass). Purely cosmetic data — none
+ * of it can touch a hitbox or outcome.
  */
 
 import { describe, expect, it } from 'vitest';
-import { COLORS, matte, neon } from '../client/src/palette';
+import { COLORS, matte, solid } from '../client/src/palette';
 
-describe('locked palette (ARTBIBLE.md)', () => {
+describe('locked palette (ARTBIBLE.md — bright arcade)', () => {
   it('pins the exact hex values', () => {
-    expect(COLORS.env).toBe(0x070b0c);
-    expect(COLORS.floor).toBe(0x0b1112);
-    expect(COLORS.wall).toBe(0x0e1719);
-    expect(COLORS.crate).toBe(0x14201e);
-    expect(COLORS.green).toBe(0x16f08a);
-    expect(COLORS.red).toBe(0xff3b47);
+    expect(COLORS.sky).toBe(0xbfe3f2);
+    expect(COLORS.horizon).toBe(0xeaf6fb);
+    expect(COLORS.surface).toBe(0xf2f4f5);
+    expect(COLORS.surface2).toBe(0xc9d1d4);
+    expect(COLORS.green).toBe(0x2bd96b);
+    expect(COLORS.red).toBe(0xff4d4d);
     expect(COLORS.gold).toBe(0xe8b84b);
-    expect(COLORS.cyan).toBe(0x36e6ff);
-    expect(COLORS.magenta).toBe(0xff45c8);
+    expect(COLORS.skyBlue).toBe(0x4fc3f7);
+    expect(COLORS.grass).toBe(0x7cc96b);
+    expect(COLORS.sand).toBe(0xe6d9a8);
+    expect(COLORS.coral).toBe(0xff8a5c);
   });
 });
 
-describe('material recipe (ARTBIBLE.md)', () => {
-  it('matte is flat-shaded, rough, near-zero metalness', () => {
+describe('material recipe (ARTBIBLE.md — bright arcade)', () => {
+  it('matte is flat-shaded, rough, zero metalness', () => {
     const m = matte(COLORS.wall);
     expect(m.flatShading).toBe(true);
-    expect(m.roughness).toBe(0.85);
-    expect(m.metalness).toBe(0.05);
-    expect(m.color.getHex()).toBe(0x0e1719);
+    expect(m.roughness).toBe(0.95);
+    expect(m.metalness).toBe(0);
+    expect(m.color.getHex()).toBe(COLORS.wall);
   });
 
-  it('neon is a dark base with a bright emissive in the bloom range', () => {
-    const n = neon(COLORS.cyan);
-    expect(n.flatShading).toBe(true);
-    expect(n.color.getHex()).toBe(COLORS.neonBase);
-    expect(n.emissive.getHex()).toBe(0x36e6ff);
-    expect(n.emissiveIntensity).toBeGreaterThanOrEqual(2.2);
-    expect(n.emissiveIntensity).toBeLessThanOrEqual(2.6);
+  it('solid is a bright flat colour with only a faint self-illumination (no bloom)', () => {
+    const s = solid(COLORS.green);
+    expect(s.flatShading).toBe(true);
+    expect(s.color.getHex()).toBe(COLORS.green);
+    expect(s.emissive.getHex()).toBe(COLORS.green);
+    // Tiny emissive to keep saturated hues readable in shadow — nowhere near a
+    // bloom threshold (the pipeline has no bloom pass at all).
+    expect(s.emissiveIntensity).toBeLessThan(0.5);
+    expect(s.metalness).toBe(0);
   });
 });

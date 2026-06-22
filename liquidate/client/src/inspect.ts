@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { COLORS, matte, neon } from './palette';
+import { COLORS, matte, solid } from './palette';
 
 export class Inspect {
   private readonly scene = new THREE.Scene();
@@ -21,27 +21,25 @@ export class Inspect {
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
     this.camera.position.set(0.2, 0.5, 3.6);
     this.camera.lookAt(0, -0.1, 0);
 
-    this.scene.add(new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 0.55));
-    const key = new THREE.DirectionalLight(COLORS.keyLight, 1.3);
-    key.position.set(2, 4, 3);
-    const rim = new THREE.PointLight(COLORS.cyan, 40, 24, 2);
-    rim.position.set(-3, 1, -2);
-    this.scene.add(key, rim);
+    this.scene.add(new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 0.95));
+    const sun = new THREE.DirectionalLight(COLORS.sun, 1.2);
+    sun.position.set(2, 4, 3);
+    this.scene.add(sun);
 
     this.buildGun();
     this.scene.add(this.rig);
   }
 
   private buildGun(): void {
-    const body = matte(0x0c1413);
-    const accent = neon(COLORS.green, 2.5);
+    const body = matte(COLORS.gunBody);
+    const accent = solid(COLORS.green, 0.35);
     this.accentMats.push(accent);
 
     const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 2.0), body);
@@ -54,7 +52,7 @@ export class Inspect {
     const mag = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.3), accent);
     mag.position.set(0, -0.5, 0.0);
 
-    const ringMat = neon(COLORS.green, 2.0);
+    const ringMat = solid(COLORS.green, 0.3);
     this.accentMats.push(ringMat);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.04, 10, 48), ringMat);
     ring.rotation.x = Math.PI / 2;
@@ -65,7 +63,10 @@ export class Inspect {
 
   /** Tint the weapon's accent parts to a skin colour. */
   setAccent(hex: number): void {
-    for (const m of this.accentMats) m.emissive.setHex(hex);
+    for (const m of this.accentMats) {
+      m.color.setHex(hex);
+      m.emissive.setHex(hex);
+    }
   }
 
   /** Begin auto-rotating + rendering (call when the inventory opens). */
