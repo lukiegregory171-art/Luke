@@ -57,6 +57,12 @@ fallback. Held weapon + cosmetics attach to bone sockets. (Drop better packs int
 
 All geometry is **chunky, low-poly, flat-shaded** with bold solid colour.
 
+**Map props (real art):** real CC0 props (Kenney — sky clouds, perimeter grass +
+corner flags) dress the arena as a **non-colliding** decorative layer
+(`env.ts buildProps`). Collision stays the simple `shared/` obstacles — decor is
+never fake cover (clouds sit above the wall line; grass/flags hug the perimeter).
+Drop richer kits into `client/assets/raw/environment/`.
+
 ## Lighting (bright + even + readable)
 
 - `HemisphereLight(sky #DCEFFA, ground #C8C3B4, 0.9)` — strong even fill.

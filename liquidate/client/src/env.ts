@@ -134,3 +134,90 @@ export function buildDressing(
 
   return { group, accentMats };
 }
+
+/**
+ * Place real CC0 environment PROPS (Kenney) as a non-colliding decorative layer:
+ * clouds high in the sky and grass + flags hugging the perimeter. `get(id)`
+ * returns a fresh clone of a loaded prop (or null if not resident — then it's
+ * simply skipped, so the procedural look still stands).
+ *
+ * Same rule as the dressing: nothing here is cover. Clouds sit above the wall
+ * line; grass/flags hug the perimeter — never planted in the interior play space.
+ * Clones SHARE cached geometry/materials, so the caller must clear them WITHOUT
+ * disposing.
+ */
+export function buildProps(
+  map: GameMap,
+  get: (id: string) => THREE.Object3D | null,
+): THREE.Group {
+  const group = new THREE.Group();
+  const halfW = map.width / 2;
+  const halfD = map.depth / 2;
+  const wallH = map.wallHeight;
+  const tmp = new THREE.Box3();
+  const size = new THREE.Vector3();
+
+  // Clone `id`, scale so its footprint (or height) ≈ `target` m, sit it at (x,y,z).
+  const place = (
+    id: string,
+    target: number,
+    x: number,
+    y: number,
+    z: number,
+    by: 'width' | 'height',
+    rotY = 0,
+  ): void => {
+    const o = get(id);
+    if (!o) return;
+    tmp.setFromObject(o);
+    tmp.getSize(size);
+    const dim = by === 'height' ? size.y : Math.max(size.x, size.z);
+    const s = target / (dim || 1);
+    o.scale.setScalar(s);
+    o.position.set(x, y - tmp.min.y * s, z);
+    o.rotation.y = rotY;
+    o.traverse((m) => {
+      const mesh = m as THREE.Mesh;
+      if (mesh.isMesh) mesh.castShadow = false; // decor doesn't cast (perf + clarity)
+    });
+    group.add(o);
+  };
+
+  // Clouds: a deterministic scatter ABOVE the wall line (never reachable/cover).
+  const cy = wallH + 7;
+  const clouds: [number, number, number][] = [
+    [-halfW * 0.8, cy + 1, -halfD * 0.5],
+    [halfW * 0.7, cy + 3, halfD * 0.3],
+    [-halfW * 0.2, cy + 5, halfD * 0.85],
+    [halfW * 0.35, cy, -halfD * 0.9],
+    [0, cy + 4, halfD * 0.2],
+    [-halfW * 0.9, cy + 2, halfD * 0.95],
+  ];
+  for (const [x, y, z] of clouds) place('cloud', 7, x, y, z, 'width');
+
+  // Grass tufts hugging the inner perimeter (short → never cover).
+  const gx = halfW - 0.7;
+  const gz = halfD - 0.7;
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    place('grass', 0.7, -gx + 2 * gx * t, 0, -gz, 'height');
+    place('grass', 0.7, -gx + 2 * gx * t, 0, gz, 'height');
+    place('grass', 0.7, -gx, 0, -gz + 2 * gz * t, 'height');
+    place('grass', 0.7, gx, 0, -gz + 2 * gz * t, 'height');
+  }
+
+  // Corner flags: perimeter accent (in the cover band, but at the corner — not
+  // interior, so it can't read as fake cover).
+  const fx = halfW - 0.5;
+  const fz = halfD - 0.5;
+  const flags: [number, number, number][] = [
+    [-fx, -fz, 0.4],
+    [fx, -fz, -0.4],
+    [-fx, fz, Math.PI - 0.4],
+    [fx, fz, Math.PI + 0.4],
+  ];
+  for (const [x, z, r] of flags) place('flag', 2.0, x, 0, z, 'height', r);
+
+  return group;
+}

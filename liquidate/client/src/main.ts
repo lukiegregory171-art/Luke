@@ -85,11 +85,12 @@ world.setFov(settings.fov);
 sfx.setVolume(settings.volume);
 sfx.setMuted(settings.muted);
 
-// Asset pipeline (P1). The manifest is empty today (procedural art), so this
-// preloads nothing yet — but the loaders + loading screen are wired so a real
-// `.glb`/`.ktx2` registered in manifest.ts loads with progress, no code change.
+// Asset pipeline (P1). The manifest now registers the rigged avatar + CC0
+// environment props; the AssetManager streams them (with the loading-screen
+// progress bar) and the world dresses maps with the props once resident.
 const assets = new AssetManager(world.renderer);
 assets.register(MANIFEST);
+world.setAssets(assets);
 
 const overlay = document.getElementById('overlay') as HTMLElement;
 const cardMenu = document.getElementById('card-menu') as HTMLElement;

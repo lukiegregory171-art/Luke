@@ -25,7 +25,8 @@ import {
   type QualityLevel,
   type QualitySettings,
 } from './quality';
-import { buildDressing, envTheme, type EnvTheme } from './env';
+import { buildDressing, buildProps, envTheme, type EnvTheme } from './env';
+import type { AssetManager } from './assets';
 import { COLORS, matte, solid } from './palette';
 import { makeGridTexture, makeTickerTexture } from './textures';
 import type { PerfHud } from './perf';
@@ -37,6 +38,10 @@ export class World {
 
   private composer!: EffectComposer;
   private readonly arena = new THREE.Group();
+  // Real CC0 environment props (clouds/grass/flags). Clones SHARE cached
+  // geometry, so this group is cleared WITHOUT disposing on a map change.
+  private readonly propsGroup = new THREE.Group();
+  private assets?: AssetManager;
   private readonly sun: THREE.DirectionalLight;
 
   // Rotating low-poly centre prop (solid gold diamond + brand ring). Decorative.
@@ -101,6 +106,7 @@ export class World {
     this.scene.add(this.core);
 
     this.scene.add(this.arena);
+    this.scene.add(this.propsGroup);
 
     this.level = initialQuality();
     this.quality = QUALITY[this.level];
@@ -157,6 +163,11 @@ export class World {
     this.camera.updateProjectionMatrix();
   }
 
+  /** Provide the asset manager so maps can be dressed with real CC0 props. */
+  setAssets(assets: AssetManager): void {
+    this.assets = assets;
+  }
+
   /** Build (or rebuild) the arena geometry + environment dressing for a map. */
   setMap(map: GameMap): void {
     this.arena.traverse((obj) => {
@@ -164,6 +175,8 @@ export class World {
       if (mesh.geometry) mesh.geometry.dispose();
     });
     this.arena.clear();
+    // Prop clones share cached geometry/materials — clear WITHOUT disposing.
+    this.propsGroup.clear();
 
     const theme = envTheme(map);
     const far = Math.max(120, Math.max(map.width, map.depth) * 2.4);
@@ -173,6 +186,12 @@ export class World {
     const { group, accentMats } = buildDressing(map, theme);
     this.arena.add(group);
     this.accentMats.push(...accentMats);
+
+    // Real CC0 prop layer (clouds/grass/flags), if the assets are resident.
+    if (this.assets) {
+      const get = (id: string): THREE.Object3D | null => this.assets!.get(`env-${id}`);
+      this.propsGroup.add(buildProps(map, get));
+    }
     this.setAccent(this.accent); // retint accents to the active skin
 
     this.core.position.set(0, map.wallHeight + 1.8, 0);

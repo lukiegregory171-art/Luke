@@ -126,9 +126,19 @@ wall line; interior decor is flat floor markings — so nothing looks like cover
 you can't actually use. `tests/env.test.ts` enforces this (no waist-height decor
 in the interior). The accent pieces are returned so the skin system retints them.
 
-**Drop-in slot:** swap the procedural floor/wall materials for `.ktx2`-textured
-PBR materials, or add prop `.glb`s per theme via the `AssetManager`. The
-procedural look is the zero-asset default.
+**Now wired (real art):** a CC0 prop layer (Kenney Platformer kit, MIT — sky
+clouds + perimeter grass/flags) is placed by `env.ts buildProps` and lives in
+`world.propsGroup`. The prop clones **share** the AssetManager's cached geometry,
+so the group is cleared **without disposing** on a map change (disposing would
+corrupt the cache). The props are **non-colliding** decoration — collision stays
+the simple `shared/` obstacles, so "what you see is what you collide with" holds:
+clouds sit above the wall line, grass/flags hug the perimeter, never the interior
+play space (`tests/env.test.ts` enforces this for both dressing and props).
+
+**Still to add:** richer modular building/ramp kits + true verticality (which
+means collidable platforms in `shared/` map data, server-authoritative), and
+`.ktx2`-textured PBR floor/wall materials. Drop kits into
+`client/assets/raw/environment/` and optimise with `scripts/optimize-gltf.mjs`.
 
 ## Skins (P4)
 

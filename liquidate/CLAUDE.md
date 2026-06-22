@@ -77,6 +77,11 @@ at a time.
 - **Cosmetic-only, always:** avatars are placed from authoritative server state
   and never touch hit detection (hitboxes are spheres from feet). Locked by
   `tests/avatar.test.ts` + `tests/character.test.ts`.
+- **Map props:** real CC0 env props (Kenney clouds/grass/flags) are a
+  **non-colliding** decorative layer placed by `env.ts buildProps` (clones live
+  in `world.propsGroup`, cleared without disposing since they share cached
+  geometry). Collision/occlusion stays the simple `shared/` obstacles — "what you
+  see is what you collide with"; `tests/env.test.ts` enforces no fake cover.
 
 ## Hard rules (do not violate)
 

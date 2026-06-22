@@ -10,6 +10,7 @@ be replaced by commissioned assets later. This file tracks third-party content.
 | Asset | Use | Source | Author | License |
 | --- | --- | --- | --- | --- |
 | **RobotExpressive** (`client/assets/raw/characters/RobotExpressive.glb` → optimised `client/public/assets/characters/robot.glb`) | Rigged, animated player avatar (opponents + practice bot), team-tinted | [mrdoob/three.js `examples/models/gltf`](https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf/RobotExpressive) | Tomás Laulhé ([Quaternius](https://quaternius.com)), modifications by [Don McCurdy](https://donmccurdy.com) | **CC0** (public domain) |
+| **Env props** — `cloud` / `grass` / `flag` (`client/assets/raw/environment/*` → `client/public/assets/env/*`) | Decorative, non-colliding map props (sky clouds + perimeter grass/flags) | [KenneyNL/Starter-Kit-3D-Platformer](https://github.com/KenneyNL/Starter-Kit-3D-Platformer) | [Kenney](https://kenney.nl) | **MIT** |
 
 Optimised with `scripts/optimize-gltf.mjs` (gltf-transform: dedup + prune +
 resample + meshopt). The procedural figure (`client/src/character.ts`) remains

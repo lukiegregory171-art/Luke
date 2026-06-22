@@ -20,4 +20,12 @@ export const MANIFEST: AssetManifest = [
   // at boot (via assets.loadGLTF) and team-tinted per player; the procedural
   // articulated figure (character.ts) stays the zero-asset fallback.
   { id: 'avatar', url: '/assets/characters/robot.glb', category: 'character' },
+
+  // Decorative environment props (CC0 "Kenney" Platformer kit, MIT — see
+  // ATTRIBUTION.md). Non-colliding visual layer placed per map (env.ts buildProps):
+  // clouds in the sky, grass + corner flags at the perimeter. Preloaded so they're
+  // resident for synchronous placement when a map loads.
+  { id: 'env-cloud', url: '/assets/env/cloud.glb', category: 'prop', preload: true },
+  { id: 'env-grass', url: '/assets/env/grass.glb', category: 'prop', preload: true },
+  { id: 'env-flag', url: '/assets/env/flag.glb', category: 'prop', preload: true },
 ];
