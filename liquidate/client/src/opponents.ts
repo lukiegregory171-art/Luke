@@ -24,13 +24,19 @@ export class Opponents {
     alive: boolean,
     weapon?: WeaponId,
     skinId?: string,
+    reloading?: boolean,
   ): void {
     let o = this.byId.get(id);
     if (!o) {
       o = new Opponent(this.scene);
       this.byId.set(id, o);
     }
-    o.pushFrame(serverTime, x, y, z, yaw, alive, weapon, skinId);
+    o.pushFrame(serverTime, x, y, z, yaw, alive, weapon, skinId, reloading);
+  }
+
+  /** Trigger a player's one-shot shoot animation (from their fire events). */
+  triggerShoot(id: string): void {
+    this.byId.get(id)?.triggerShoot();
   }
 
   /** Drop any avatars whose ids are no longer present (left the match). */

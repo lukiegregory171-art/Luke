@@ -42,6 +42,7 @@ import { Opponents } from './opponents';
 import { Impacts } from './impacts';
 import { Shake } from './shake';
 import { Inspect } from './inspect';
+import { setAvatarSource } from './avatarsource';
 import { Match, type MatchResult } from './match';
 import { Practice } from './practice';
 import { Lobby } from './lobby';
@@ -517,9 +518,21 @@ const loadingLabel = document.getElementById('loading-label') as HTMLElement;
 async function boot(): Promise<void> {
   // Assets take the first 80% of the bar; shader warmup the last 20%.
   await assets.preloadCritical((p) => {
-    loadingFill.style.width = `${Math.round(p.fraction * 80)}%`;
+    loadingFill.style.width = `${Math.round(p.fraction * 70)}%`;
     loadingLabel.textContent = p.label;
   });
+
+  // Load the rigged player avatar (with its animation clips). If it fails, the
+  // procedural figure is the fallback — never block reaching the lobby.
+  loadingLabel.textContent = 'Loading characters…';
+  loadingFill.style.width = '80%';
+  try {
+    const gltf = await assets.loadGLTF('avatar');
+    setAvatarSource(gltf.scene, gltf.animations);
+  } catch {
+    // No rig — procedural avatars will be used.
+  }
+
   loadingLabel.textContent = 'Warming renderer…';
   try {
     await world.warmup();

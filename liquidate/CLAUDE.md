@@ -59,6 +59,25 @@ at a time.
   `tests/weaponskins.test.ts`. **DEMO/devnet only — never real money, never
   pay-to-win.**
 
+## Avatars & asset pipeline (real art)
+
+- **Source intake:** drop real CC0/permissive packs into `client/assets/raw/…`
+  (see its README). Optimise with `node scripts/optimize-gltf.mjs <in> <out>`
+  (gltf-transform: dedup + prune + resample + **meshopt** — no weld/simplify, to
+  keep rigs intact); ship the result under `client/public/assets/…` and register
+  it (data-only) in `client/src/manifest.ts`. Decoders aren't needed for meshopt
+  (bundled); KTX2 textures would (see `docs/assets.md`).
+- **Rigged avatar:** the player body is a CC0 rigged glTF (RobotExpressive,
+  Quaternius/Don McCurdy — `ATTRIBUTION.md`) loaded at boot with its clips and
+  cloned per player (`riggedcharacter.ts`, `AnimationMixer` crossfades:
+  idle/run/jump/shoot/reload/death). Team colour is a per-instance material tint;
+  the held weapon hangs off the **right-hand bone socket**. `createAvatar`
+  (`avatar.ts`) returns the rig when loaded, else the **procedural** figure
+  (`character.ts`) — procedural is the flagged fallback, never the final look.
+- **Cosmetic-only, always:** avatars are placed from authoritative server state
+  and never touch hit detection (hitboxes are spheres from feet). Locked by
+  `tests/avatar.test.ts` + `tests/character.test.ts`.
+
 ## Hard rules (do not violate)
 
 1. **No real money, ever.** The economy is play-money integers only. No

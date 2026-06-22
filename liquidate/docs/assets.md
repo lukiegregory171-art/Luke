@@ -79,12 +79,32 @@ It is **cosmetic-only**: animation moves only child limbs, never the root, so it
 can't move a player or shift a hitbox (hurtboxes are `hurtboxes(feet)` in
 `shared/`). `tests/character.test.ts` locks that invariant in.
 
-**Drop-in slot for a real rigged character:** register a skinned `.glb` with
-named clips in the manifest (e.g. idle/run/death), load it via the
-`AssetManager`, and drive a `THREE.AnimationMixer` from the same speed/alive
-signals `Character.update()` already consumes. The procedural rig stays the
-zero-asset fallback. Quaternius has CC0 rigged characters; Mixamo provides free
-animations (check its license terms before shipping).
+**Now wired (real art):** a CC0 rigged glTF — **RobotExpressive** (Tomás Laulhé /
+Quaternius, mods by Don McCurdy; see `ATTRIBUTION.md`) — is loaded at boot with
+its animation clips (`AssetManager.loadGLTF('avatar')`), stashed in
+`avatarsource.ts`, and cloned per player by `riggedcharacter.ts`. It runs a
+`THREE.AnimationMixer` with crossfades (idle→Idle, run→Running, jump→Jump,
+shoot→Punch, reload→Wave, death→Death), a per-instance team-colour tint on the
+body material, and the held weapon parented to the **right-hand bone socket**.
+`createAvatar()` (`avatar.ts`) returns the rig when the asset is loaded and the
+procedural figure otherwise — procedural stays the flagged zero-asset fallback.
+`tests/avatar.test.ts` re-locks the cosmetic-only / hitbox-independent invariant.
+
+### Source intake + conversion
+
+Drop raw pack files (FBX/glTF/PNG) under `client/assets/raw/{characters,weapons,
+environment,props,skins}/` (see that folder's README for naming), then optimise:
+
+```
+node scripts/optimize-gltf.mjs client/assets/raw/characters/Foo.glb \
+                               client/public/assets/characters/foo.glb
+```
+
+The script applies dedup → prune → resample → **meshopt** compression (safe for
+rigs; we avoid weld/simplify/join, which can tear skinning or animation tracks).
+meshopt needs **no decoder files** (the decoder is bundled). KTX2/Basis textures
+are a separate step (`toktx`); RobotExpressive ships **0 textures**, so none was
+needed. Register the output in `client/src/manifest.ts` (data only).
 
 ## Maps & environment (P5)
 

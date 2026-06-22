@@ -14,4 +14,10 @@
 
 import type { AssetManifest } from './assets';
 
-export const MANIFEST: AssetManifest = [];
+export const MANIFEST: AssetManifest = [
+  // Rigged player avatar (CC0 "RobotExpressive" by Tomás Laulhé / Quaternius,
+  // mods by Don McCurdy — see ATTRIBUTION.md). Loaded with its animation clips
+  // at boot (via assets.loadGLTF) and team-tinted per player; the procedural
+  // articulated figure (character.ts) stays the zero-asset fallback.
+  { id: 'avatar', url: '/assets/characters/robot.glb', category: 'character' },
+];

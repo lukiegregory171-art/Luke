@@ -21,7 +21,7 @@ import {
   type MoveState,
   type Vec3,
 } from '@liquidate/shared';
-import { Character } from './character';
+import { createAvatar, type Avatar } from './avatar';
 import { COLORS } from './palette';
 
 const TURN_RATE = 5.5; // rad/s aim slew
@@ -45,7 +45,7 @@ export class Bot {
   /** Disables AI movement/firing (used for a calm target and by tests). */
   passive = false;
 
-  private readonly character: Character;
+  private readonly character: Avatar;
   private ammo = ASSAULT.magazine;
   private fireCd = 0;
   private reloadTimer = 0;
@@ -55,7 +55,7 @@ export class Bot {
   constructor(scene: THREE.Scene, spawn: Vec3) {
     this.move = makeMoveState(spawn);
     // Red-visor team tint to distinguish the bot from a networked opponent.
-    this.character = new Character(scene, { body: 0x0e1719, team: COLORS.red });
+    this.character = createAvatar(scene, { body: 0x0e1719, team: COLORS.red });
     this.renderAvatar(0); // place + show upright at spawn
   }
 
@@ -166,6 +166,7 @@ export class Bot {
         // Apply jitter to this shot's aim.
         this.yaw += (Math.random() * 2 - 1) * AIM_JITTER;
         this.pitch += (Math.random() * 2 - 1) * AIM_JITTER;
+        this.character.triggerShoot?.();
         fire = true;
       }
     }
@@ -176,6 +177,8 @@ export class Bot {
   private renderAvatar(dt: number): void {
     const speed = Math.hypot(this.move.vel.x, this.move.vel.z);
     this.character.place(this.move.pos.x, this.move.pos.y, this.move.pos.z, this.yaw);
+    this.character.setAirborne?.(this.move.pos.y > 0.25);
+    this.character.setReloading?.(this.reloadTimer > 0);
     this.character.update(dt, speed);
   }
 }

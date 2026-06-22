@@ -147,6 +147,18 @@ export class AssetManager {
     return root.clone(true) as THREE.Group;
   }
 
+  /**
+   * Load the FULL glTF for an id (scene + animations + skins), bypassing the
+   * clone-cache. Use for rigged characters where the caller needs the
+   * `AnimationClip`s (the clone-cache only keeps the scene). Reuses the same
+   * configured loaders (Draco / meshopt / KTX2).
+   */
+  async loadGLTF(id: string): Promise<GLTF> {
+    const entry = this.manifest.get(id);
+    if (!entry) throw new Error(`AssetManager: unknown asset id "${id}"`);
+    return this.gltf.loadAsync(entry.url);
+  }
+
   private async fetch(entry: AssetEntry): Promise<THREE.Group> {
     const gltf: GLTF = await this.gltf.loadAsync(entry.url);
     const root = gltf.scene;

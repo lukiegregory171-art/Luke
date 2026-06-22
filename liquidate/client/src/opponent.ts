@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { DEFAULT_WEAPON, type WeaponId } from '@liquidate/shared';
-import { Character } from './character';
+import { createAvatar, type Avatar } from './avatar';
 import { COLORS } from './palette';
 
 interface Frame {
@@ -25,16 +25,22 @@ interface Frame {
 const MAX_FRAMES = 40;
 
 export class Opponent {
-  private readonly character: Character;
+  private readonly character: Avatar;
   private readonly buffer: Frame[] = [];
   private weapon: WeaponId = DEFAULT_WEAPON;
   private skinId?: string;
+  private reloading = false;
   private appliedWeapon?: WeaponId;
   private appliedSkin?: string;
 
   constructor(scene: THREE.Scene) {
     // Enemy: dark visor, RED team body (locked readability).
-    this.character = new Character(scene, { body: 0x0e1719, team: COLORS.red });
+    this.character = createAvatar(scene, { body: 0x0e1719, team: COLORS.red });
+  }
+
+  /** One-shot shoot animation (driven by the opponent's fire events). */
+  triggerShoot(): void {
+    this.character.triggerShoot?.();
   }
 
   /** Clear interpolation state between matches and hide the avatar. */
@@ -68,11 +74,13 @@ export class Opponent {
     alive: boolean,
     weapon?: WeaponId,
     skinId?: string,
+    reloading?: boolean,
   ): void {
     this.buffer.push({ t: serverTime, x, y, z, yaw, alive });
     if (this.buffer.length > MAX_FRAMES) this.buffer.shift();
     if (weapon) this.weapon = weapon;
     this.skinId = skinId;
+    this.reloading = reloading ?? false;
   }
 
   /** Render the opponent at the given (server-time) render moment. */
@@ -107,6 +115,8 @@ export class Opponent {
 
     this.character.place(x, y, z, yaw);
     this.character.setAlive(newer.alive);
+    this.character.setAirborne?.(y > 0.25); // feet above the floor → jumping
+    this.character.setReloading?.(this.reloading);
     this.character.update(dt, speed);
 
     // Apply the broadcast weapon + cosmetic skin when it changes (cheap; the

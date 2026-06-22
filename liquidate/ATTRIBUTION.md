@@ -5,7 +5,20 @@ be replaced by commissioned assets later. This file tracks third-party content.
 
 ## Art / assets
 
-**None yet.** There are **no external art assets** in the repo. The M2 look
+### Real assets in the repo
+
+| Asset | Use | Source | Author | License |
+| --- | --- | --- | --- | --- |
+| **RobotExpressive** (`client/assets/raw/characters/RobotExpressive.glb` → optimised `client/public/assets/characters/robot.glb`) | Rigged, animated player avatar (opponents + practice bot), team-tinted | [mrdoob/three.js `examples/models/gltf`](https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf/RobotExpressive) | Tomás Laulhé ([Quaternius](https://quaternius.com)), modifications by [Don McCurdy](https://donmccurdy.com) | **CC0** (public domain) |
+
+Optimised with `scripts/optimize-gltf.mjs` (gltf-transform: dedup + prune +
+resample + meshopt). The procedural figure (`client/src/character.ts`) remains
+the zero-asset fallback when the rig isn't loaded. Weapons, environment, and
+skin textures are still procedural — flagged below — pending real packs.
+
+### Procedural (placeholder) — still to be replaced
+
+There are **no external art assets** for these yet. The look
 (`ARTBIBLE.md`) is entirely procedural / engine-generated:
 
 - **Lighting** is a hand-built rig (hemisphere + warm key with PCF soft shadows
@@ -37,6 +50,9 @@ keep the matching files under `client/public/assets/` (see `docs/assets.md`).
 - [stats.js](https://github.com/mrdoob/stats.js) — MIT
 - [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) — MIT
 - [ws](https://github.com/websockets/ws) — MIT
+- [@gltf-transform/core·functions·extensions](https://gltf-transform.dev) — MIT
+  (dev-only: the `.glb` optimisation pipeline, `scripts/optimize-gltf.mjs`)
+- [meshoptimizer](https://github.com/zeux/meshoptimizer) — MIT (meshopt encode/decode)
 
 > M2 replaced the pmndrs `postprocessing` + `n8ao` post stack with three's
 > built-in `UnrealBloomPass`, cutting ~145 kB gzip off the bundle. Those packages

@@ -38,6 +38,13 @@ readable silhouette — with a **dark visor** that shows which way they face and
 enemy) is the thing that reads at a glance. No thin emissive strips on dark
 bodies.
 
+**Rig (real art):** the player body is a CC0 **rigged glTF** (RobotExpressive —
+Quaternius/Don McCurdy) driven by an `AnimationMixer` (idle/run/jump/shoot/reload/
+death crossfades), team-tinted via a per-instance material override so green vs
+red still reads instantly. The procedural figure is the flagged zero-asset
+fallback. Held weapon + cosmetics attach to bone sockets. (Drop better packs into
+`client/assets/raw/` — see `docs/assets.md`.)
+
 ## Materials
 
 - **Matte:** `MeshStandardMaterial { flatShading: true, roughness: 0.95, metalness: 0 }`

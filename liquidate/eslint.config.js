@@ -27,5 +27,12 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  {
+    // Node build scripts (the glTF optimisation pipeline) run under Node.
+    files: ['scripts/**/*.{js,mjs}'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+  },
   prettier,
 );

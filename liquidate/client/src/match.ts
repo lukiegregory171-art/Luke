@@ -138,7 +138,10 @@ export class Match {
         this.onSnap(msg);
         break;
       case 'fire':
-        if (msg.id !== this.selfId) this.renderOpponentShot(msg.weapon, msg.origin, msg.dir);
+        if (msg.id !== this.selfId) {
+          this.renderOpponentShot(msg.weapon, msg.origin, msg.dir);
+          this.opponents.triggerShoot(msg.id);
+        }
         break;
       case 'hit':
         this.onHit(msg.shooter, msg.target, msg.headshot);
@@ -356,7 +359,18 @@ export class Match {
     for (const p of msg.players) {
       if (p.id === this.selfId) continue;
       present.add(p.id);
-      this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.y, p.z, p.yaw, p.alive, p.weapon, p.skin);
+      this.opponents.pushFrame(
+        p.id,
+        msg.serverTime,
+        p.x,
+        p.y,
+        p.z,
+        p.yaw,
+        p.alive,
+        p.weapon,
+        p.skin,
+        p.reloading,
+      );
       // TDM: teammates glow GREEN, enemies RED (relative to you).
       if (this.mode === 'tdm') {
         const ally = this.teams[p.id] === this.selfTeam;
