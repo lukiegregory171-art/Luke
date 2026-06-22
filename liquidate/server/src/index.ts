@@ -176,6 +176,19 @@ wss.on('connection', (socket: WebSocket) => {
       case 'queue':
         matchmaker.enqueue(session, msg.stake, msg.mode ?? 'duel');
         return;
+      case 'buySkin':
+        if (session.accountId) {
+          bank.buySkin(session.accountId, msg.skinId);
+          sendAccount(conn, bank, session.accountId);
+          sendTreasury(conn, bank);
+        }
+        return;
+      case 'equipSkin':
+        if (session.accountId) {
+          bank.equipSkin(session.accountId, msg.weapon, msg.skinId);
+          sendAccount(conn, bank, session.accountId);
+        }
+        return;
       default:
         matchmaker.route(conn, msg);
     }

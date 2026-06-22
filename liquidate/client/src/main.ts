@@ -10,12 +10,22 @@
 
 import {
   DEFAULT_MAP,
+  RARITY,
   SKINS,
+  WEAPONS,
+  WEAPON_IDS,
   accentHex,
+  defaultLoadout,
   isSkinUnlocked,
   randomMap,
+  skinPrice,
+  skinsForWeapon,
+  weaponSkinById,
+  type AccountMessage,
   type ServerMessage,
   type Skin,
+  type WeaponId,
+  type WeaponSkin,
 } from '@liquidate/shared';
 import { World } from './world';
 import { AssetManager } from './assets';
@@ -116,6 +126,7 @@ net.onMessage = (msg: ServerMessage) => {
     case 'account':
       lobby.setAccount(msg);
       window.__liq!.balance = msg.balance;
+      onAccount(msg);
       break;
     case 'treasury':
       lobby.setTreasury(msg.balance);
@@ -295,18 +306,17 @@ document.addEventListener('pointerdown', (e) => {
   if ((e.target as HTMLElement).closest('button')) sfx.ui();
 });
 
-// --- Cosmetics (M5: skins, optionally devnet-token gated) ------------------
+// --- Colour theme (M5: UI/arena accent, optionally devnet-token gated) ------
 let tokenBalance = 0;
 let selectedSkin = savedSkin();
 
-// Apply a skin everywhere it shows: UI accent (CSS) + in-world neon + viewmodel
-// energy/tracers. All client-local cosmetics — the skin is never sent to the
-// server and never touches the opponent's (fixed, readable) appearance.
+// Apply a colour theme to UI accent (CSS) + the in-world arena accent. The
+// per-weapon GUN look is driven by the weapon-skins locker below, not this.
+// Client-local cosmetics — never sent to the server, never affect the opponent's
+// (fixed, readable) appearance.
 function theme(skin: Skin): void {
   applySkin(skin);
-  const hx = accentHex(skin);
-  world.setAccent(hx);
-  gun.setAccent(hx);
+  world.setAccent(accentHex(skin));
 }
 theme(selectedSkin);
 
@@ -332,47 +342,111 @@ function renderSkins(): void {
 }
 renderSkins();
 
-// --- Arsenal: cosmetics inventory + 3D inspect -----------------------------
+// --- Weapon-skins locker (Part B) ------------------------------------------
+// Server-authoritative ownership: `owned`/`loadout`/`balance` come from the
+// account message; we can only EQUIP what the server says we own, and buying is
+// a server transaction. Skins are cosmetic — they never change stats or hits.
+let owned = new Set<string>();
+let loadout: Record<WeaponId, string> = defaultLoadout();
+let walletBalance = 0;
+let loggedIn = false;
+
 const inspect = new Inspect(document.getElementById('inspect-canvas') as HTMLCanvasElement);
+const lockerWeaponsEl = document.getElementById('locker-weapons') as HTMLElement;
 const invSkinsEl = document.getElementById('inv-skins') as HTMLElement;
 const invNameEl = document.getElementById('inv-name') as HTMLElement;
 const invReqEl = document.getElementById('inv-req') as HTMLElement;
 const invEquipBtn = document.getElementById('inv-equip') as HTMLButtonElement;
-let previewSkin = selectedSkin;
+const invBuyBtn = document.getElementById('inv-buy') as HTMLButtonElement;
+const lockerBalanceEl = document.getElementById('locker-balance') as HTMLElement;
 
-function previewInInspect(skin: Skin): void {
+let lockerWeapon: WeaponId = 'assault';
+let previewSkin: WeaponSkin = weaponSkinById(loadout.assault) ?? skinsForWeapon('assault')[0];
+
+// Apply the equipped loadout to the first-person viewmodel.
+gun.setLoadout(loadout);
+
+/** Account update: refresh ownership/loadout, re-skin the gun, refresh locker. */
+function onAccount(msg: AccountMessage): void {
+  loggedIn = true;
+  owned = new Set(msg.owned);
+  loadout = msg.loadout;
+  walletBalance = msg.balance;
+  gun.setLoadout(loadout);
+  if (!cardInventory.classList.contains('hidden')) renderLocker();
+}
+
+function renderLockerWeapons(): void {
+  lockerWeaponsEl.innerHTML = '';
+  for (const id of WEAPON_IDS) {
+    const b = document.createElement('button');
+    b.className = 'wpn-pick' + (id === lockerWeapon ? ' sel' : '');
+    b.textContent = WEAPONS[id].name;
+    b.addEventListener('click', () => {
+      lockerWeapon = id;
+      previewSkin = weaponSkinById(loadout[id]) ?? skinsForWeapon(id)[0];
+      renderLocker();
+    });
+    lockerWeaponsEl.appendChild(b);
+  }
+}
+
+function renderLockerSkins(): void {
+  invSkinsEl.innerHTML = '';
+  for (const skin of skinsForWeapon(lockerWeapon)) {
+    const meta = RARITY[skin.rarity];
+    const isOwned = owned.has(skin.id) || skinPrice(skin) === 0;
+    const isEquipped = loadout[lockerWeapon] === skin.id;
+    const tile = document.createElement('button');
+    tile.className =
+      'skin-tile' + (skin.id === previewSkin.id ? ' on' : '') + (isEquipped ? ' equipped' : '');
+    tile.style.borderColor = meta.color;
+    tile.dataset.id = skin.id;
+    const tag = isEquipped ? 'EQUIPPED' : isOwned ? '' : `${skinPrice(skin)}`;
+    tile.innerHTML =
+      `<span class="tile-swatch" style="background:linear-gradient(135deg, ${skin.base} 0 55%, ${skin.secondary} 55% 100%)"></span>` +
+      `<span class="tile-name">${escapeHtml(skin.name)}</span>` +
+      `<span class="tile-rarity" style="color:${meta.color}">${meta.label}</span>` +
+      (tag ? `<span class="tile-tag${isEquipped ? ' eq' : ' price'}">${tag}</span>` : '') +
+      (isOwned || isEquipped ? '' : '<span class="tile-lock">🔒</span>');
+    tile.addEventListener('click', () => preview(skin));
+    invSkinsEl.appendChild(tile);
+  }
+}
+
+function preview(skin: WeaponSkin): void {
   previewSkin = skin;
-  inspect.setAccent(accentHex(skin));
+  inspect.show(skin);
+  const meta = RARITY[skin.rarity];
   invNameEl.textContent = skin.name;
-  const unlocked = isSkinUnlocked(skin, tokenBalance);
-  invReqEl.textContent = unlocked
-    ? skin.id === selectedSkin.id
-      ? 'EQUIPPED'
-      : 'Owned'
-    : `Locked — needs ${skin.requires} devnet token`;
-  invEquipBtn.disabled = !unlocked || skin.id === selectedSkin.id;
+  invNameEl.style.color = meta.color;
+  const isOwned = owned.has(skin.id) || skinPrice(skin) === 0;
+  const isEquipped = loadout[skin.weapon] === skin.id;
+  invReqEl.textContent = isEquipped
+    ? `${meta.label} · EQUIPPED`
+    : isOwned
+      ? `${meta.label} · Owned`
+      : `${meta.label} · ${skinPrice(skin)} DEMO`;
+  invReqEl.style.color = meta.color;
+  invEquipBtn.disabled = !isOwned || isEquipped;
+  invBuyBtn.classList.toggle('hidden', isOwned);
+  invBuyBtn.disabled = !loggedIn || walletBalance < skinPrice(skin);
+  invBuyBtn.textContent = `BUY · ${skinPrice(skin)}`;
   for (const el of Array.from(invSkinsEl.children) as HTMLElement[]) {
     el.classList.toggle('on', el.dataset.id === skin.id);
   }
 }
 
-function renderInventory(): void {
-  invSkinsEl.innerHTML = '';
-  for (const skin of SKINS) {
-    const unlocked = isSkinUnlocked(skin, tokenBalance);
-    const cell = document.createElement('button');
-    cell.className =
-      'inv-cell' + (skin.id === selectedSkin.id ? ' equipped' : '') + (unlocked ? '' : ' locked');
-    cell.dataset.id = skin.id;
-    cell.innerHTML = `<span class="dot" style="background:${skin.color}"></span>${skin.name}`;
-    cell.addEventListener('click', () => previewInInspect(skin));
-    invSkinsEl.appendChild(cell);
-  }
-  previewInInspect(previewSkin);
+function renderLocker(): void {
+  lockerBalanceEl.textContent = loggedIn ? `${walletBalance} DEMO` : 'sign in to buy';
+  renderLockerWeapons();
+  renderLockerSkins();
+  preview(previewSkin);
 }
 
 function openArsenal(): void {
-  renderInventory();
+  lockerWeapon = previewSkin.weapon;
+  renderLocker();
   showCard(cardInventory);
   inspect.start();
   requestAnimationFrame(() => inspect.resize());
@@ -380,16 +454,30 @@ function openArsenal(): void {
 
 document.getElementById('lobby-arsenal')!.addEventListener('click', openArsenal);
 invEquipBtn.addEventListener('click', () => {
-  if (!isSkinUnlocked(previewSkin, tokenBalance)) return;
-  selectedSkin = previewSkin;
-  theme(selectedSkin);
-  renderSkins();
-  renderInventory();
+  const isOwned = owned.has(previewSkin.id) || skinPrice(previewSkin) === 0;
+  if (!isOwned) return;
+  // Optimistic local apply; the server validates ownership and echoes the
+  // authoritative loadout in the next account message.
+  loadout[previewSkin.weapon] = previewSkin.id;
+  gun.setLoadout(loadout);
+  net.send({ type: 'equipSkin', weapon: previewSkin.weapon, skinId: previewSkin.id });
+  renderLocker();
+});
+invBuyBtn.addEventListener('click', () => {
+  if (!loggedIn || owned.has(previewSkin.id)) return;
+  net.send({ type: 'buySkin', skinId: previewSkin.id });
 });
 document.getElementById('inv-close')!.addEventListener('click', () => {
   inspect.stop();
   showCard(cardMenu);
 });
+
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
+}
 
 if (TOKEN_ENABLED) {
   const wallet = document.getElementById('wallet') as HTMLElement;

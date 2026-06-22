@@ -1,22 +1,29 @@
 /**
- * 3D weapon inspect (Phase B cosmetics). A small self-contained Three.js scene
- * that renders a slowly rotating weapon on a neon pedestal, tinted by the
- * currently-previewed skin accent — what a skin actually recolours in your hands
- * (viewmodel + tracers + UI + arena neon). Client-only presentation; lives in its
- * own canvas and only renders while the inventory screen is open.
+ * Weapon-skin INSPECT turntable (Part B locker). A small self-contained Three.js
+ * scene that renders the actual per-archetype weapon MODEL wearing a chosen
+ * cosmetic SKIN, slowly rotating under bright studio lighting on a pedestal — the
+ * Rivals/CS-style inspect view. Client-only presentation; renders only while the
+ * locker is open.
  */
 
 import * as THREE from 'three';
-import { COLORS, matte, solid } from './palette';
+import { COLORS } from './palette';
+import { buildWeaponModel, type WeaponModel } from './weaponmodel';
+import { skinMaterials, type SkinPaint } from './skinmat';
+import { defaultSkinFor, type WeaponSkin } from '@liquidate/shared';
+
+const INSPECT_SCALE = 2.4; // blow the viewmodel-sized model up to fill the frame
 
 export class Inspect {
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly renderer: THREE.WebGLRenderer;
-  private readonly rig = new THREE.Group();
-  private readonly accentMats: THREE.MeshStandardMaterial[] = [];
+  private readonly rig = new THREE.Group(); // turntable — holds the model, spins
+  private model?: WeaponModel;
+  private paint: SkinPaint;
   private raf = 0;
   private running = false;
+  private last = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -24,63 +31,68 @@ export class Inspect {
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
-    this.camera.position.set(0.2, 0.5, 3.6);
-    this.camera.lookAt(0, -0.1, 0);
+    this.camera = new THREE.PerspectiveCamera(36, 1, 0.1, 50);
+    this.camera.position.set(0.1, 0.5, 4.2);
+    this.camera.lookAt(0, -0.05, 0);
 
-    this.scene.add(new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 0.95));
-    const sun = new THREE.DirectionalLight(COLORS.sun, 1.2);
-    sun.position.set(2, 4, 3);
-    this.scene.add(sun);
+    // Bright, even studio lighting.
+    this.scene.add(new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 1.0));
+    const key = new THREE.DirectionalLight(COLORS.sun, 1.3);
+    key.position.set(2, 4, 3);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+    fill.position.set(-3, 1, 2);
+    this.scene.add(key, fill);
 
-    this.buildGun();
+    // Pedestal ring.
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.5, 0.04, 10, 48),
+      new THREE.MeshStandardMaterial({ color: 0xc9d1d4, roughness: 0.6, metalness: 0.2 }),
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = -1.1;
+    this.scene.add(ring);
+
+    const start = defaultSkinFor('assault');
+    this.paint = skinMaterials(start);
+    this.buildModel(start);
     this.scene.add(this.rig);
   }
 
-  private buildGun(): void {
-    const body = matte(COLORS.gunBody);
-    const accent = solid(COLORS.green, 0.35);
-    this.accentMats.push(accent);
-
-    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 2.0), body);
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 1.7), body);
-    barrel.position.set(0, 0.04, -1.7);
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.6), accent);
-    sight.position.set(0, 0.4, -0.2);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.72, 0.42), body);
-    grip.position.set(0, -0.55, 0.55);
-    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.3), accent);
-    mag.position.set(0, -0.5, 0.0);
-
-    const ringMat = solid(COLORS.green, 0.3);
-    this.accentMats.push(ringMat);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.04, 10, 48), ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = -1.05;
-
-    this.rig.add(receiver, barrel, sight, grip, mag, ring);
-  }
-
-  /** Tint the weapon's accent parts to a skin colour. */
-  setAccent(hex: number): void {
-    for (const m of this.accentMats) {
-      m.color.setHex(hex);
-      m.emissive.setHex(hex);
+  private buildModel(skin: WeaponSkin): void {
+    if (this.model) {
+      for (const m of [...this.model.body, ...this.model.accent]) m.geometry.dispose();
+      this.rig.remove(this.model.group);
     }
+    this.model = buildWeaponModel(skin.weapon, this.paint.body, this.paint.accent);
+    this.model.group.scale.setScalar(INSPECT_SCALE);
+    this.rig.add(this.model.group);
+    this.paint.decorate(this.model.group);
   }
 
-  /** Begin auto-rotating + rendering (call when the inventory opens). */
+  /** Show a weapon skin on the turntable (rebuilds the model + materials). */
+  show(skin: WeaponSkin): void {
+    const old = this.paint;
+    this.paint = skinMaterials(skin);
+    this.buildModel(skin);
+    old.dispose();
+  }
+
+  /** Begin auto-rotating + rendering (call when the locker opens). */
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.last = performance.now();
     this.resize();
-    const loop = (): void => {
+    const loop = (now: number): void => {
       if (!this.running) return;
-      this.rig.rotation.y += 0.012;
+      const dt = Math.min((now - this.last) / 1000, 0.05);
+      this.last = now;
+      this.rig.rotation.y += dt * 0.7;
+      this.paint.update(dt);
       this.renderer.render(this.scene, this.camera);
       this.raf = requestAnimationFrame(loop);
     };
-    loop();
+    this.raf = requestAnimationFrame(loop);
   }
 
   stop(): void {

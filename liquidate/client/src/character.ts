@@ -22,8 +22,15 @@
  */
 
 import * as THREE from 'three';
-import { HEAD_SPHERE, MOVE_SPEED } from '@liquidate/shared';
+import {
+  HEAD_SPHERE,
+  MOVE_SPEED,
+  weaponSkinById,
+  type WeaponId,
+  type WeaponSkin,
+} from '@liquidate/shared';
 import { matte, solid } from './palette';
+import { buildWeaponModel, type WeaponModel } from './weaponmodel';
 
 export interface CharacterColors {
   body: number; // dark accent for the visor (facing read)
@@ -58,6 +65,14 @@ export class Character {
   private readonly armR: THREE.Group;
   private readonly mats: THREE.Material[] = [];
   private readonly teamMat: THREE.MeshStandardMaterial;
+
+  // Third-person held weapon (so the player's equipped weapon + skin reads to
+  // others). Static materials — no per-frame skin animation here, for perf.
+  private readonly hand = new THREE.Group();
+  private readonly heldBody = new THREE.MeshStandardMaterial({ color: 0x3a4754, flatShading: true, roughness: 0.85 });
+  private readonly heldAccent = new THREE.MeshStandardMaterial({ color: 0x2bd96b, flatShading: true, roughness: 0.6, metalness: 0.3 });
+  private heldModel?: WeaponModel;
+  private heldWeaponId?: WeaponId;
 
   private phase = 0; // walk-cycle phase
   private idle = 0; // idle-breathing phase
@@ -104,7 +119,13 @@ export class Character {
     this.armL.name = 'armL';
     this.armR.name = 'armR';
 
-    this.frame.add(torso, chest, head, visor, this.legL, this.legR, this.armL, this.armR);
+    this.mats.push(this.heldBody, this.heldAccent);
+    // Held weapon rides in the right hand (forward = -Z, the facing direction).
+    this.hand.position.set(0.34, 1.2, -0.34);
+    this.hand.scale.setScalar(0.85);
+    this.buildHeld('assault');
+
+    this.frame.add(torso, chest, head, visor, this.legL, this.legR, this.armL, this.armR, this.hand);
     this.root.add(this.frame);
 
     // Ground ring stays on the floor (on the root, not the animated frame), so it
@@ -123,6 +144,35 @@ export class Character {
   setTeam(color: number): void {
     this.teamMat.color.setHex(color);
     this.teamMat.emissive.setHex(color); // keep the slight self-illumination in step
+  }
+
+  private buildHeld(id: WeaponId): void {
+    if (this.heldModel) {
+      for (const m of [...this.heldModel.body, ...this.heldModel.accent]) m.geometry.dispose();
+      this.hand.remove(this.heldModel.group);
+    }
+    this.heldWeaponId = id;
+    this.heldModel = buildWeaponModel(id, this.heldBody, this.heldAccent);
+    this.hand.add(this.heldModel.group);
+  }
+
+  /**
+   * Set the third-person held weapon + cosmetic skin (the equipped weapon/skin
+   * the server broadcasts for this player). Cosmetic only — never affects hits.
+   */
+  setHeld(weapon: WeaponId, skinId: string | undefined): void {
+    if (weapon !== this.heldWeaponId) this.buildHeld(weapon);
+    const skin: WeaponSkin | undefined = skinId ? weaponSkinById(skinId) : undefined;
+    this.heldBody.color.set(skin ? skin.base : '#3a4754');
+    const accent = skin ? (skin.emissiveColor ?? skin.secondary) : '#2bd96b';
+    this.heldAccent.color.set(accent);
+    if (skin?.emissive) {
+      this.heldAccent.emissive.set(skin.emissiveColor ?? skin.secondary);
+      this.heldAccent.emissiveIntensity = 0.7;
+    } else {
+      this.heldAccent.emissive.setHex(0x000000);
+      this.heldAccent.emissiveIntensity = 0;
+    }
   }
 
   /** Place the root at the authoritative feet position + facing (no animation). */

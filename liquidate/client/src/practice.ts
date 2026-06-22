@@ -244,6 +244,7 @@ export class Practice {
     this.reloading = true;
     this.reloadTimer = w.reloadTime;
     this.hud.setReloading(true);
+    this.gun.setReloading(true);
     this.sfx.reload();
   }
 
@@ -251,6 +252,7 @@ export class Practice {
     this.reloading = false;
     this.ammo[this.weapon] = WEAPONS[this.weapon].magazine;
     this.hud.setReloading(false);
+    this.gun.setReloading(false);
     this.hud.setAmmo(this.ammo[this.weapon], WEAPONS[this.weapon].magazine);
   }
 

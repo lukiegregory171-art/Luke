@@ -11,4 +11,5 @@ export * from './movement';
 export * from './raycast';
 export * from './messages';
 export * from './cosmetics';
+export * from './weaponskins';
 export * from './lagcomp';

@@ -46,6 +46,21 @@ export interface SwitchMessage {
   weapon: WeaponId;
 }
 
+// --- Cosmetics (server-authoritative ownership; DEMO currency only) ---------
+
+/** Buy/unlock a weapon skin with DEMO currency (server validates price/balance). */
+export interface BuySkinMessage {
+  type: 'buySkin';
+  skinId: string;
+}
+
+/** Equip a skin for a weapon (server validates you OWN it). Cosmetic only. */
+export interface EquipSkinMessage {
+  type: 'equipSkin';
+  weapon: WeaponId;
+  skinId: string;
+}
+
 // --- Economy (play-money / DEMO) -------------------------------------------
 
 /** Create or load a demo account by handle. */
@@ -84,6 +99,8 @@ export type ClientMessage =
   | FireMessage
   | ReloadMessage
   | SwitchMessage
+  | BuySkinMessage
+  | EquipSkinMessage
   | LoginMessage
   | QueueMessage
   | DepositMessage
@@ -126,6 +143,8 @@ export interface AccountMessage {
   losses: number;
   kills: number;
   deaths: number;
+  owned: string[]; // owned weapon-skin ids (server-authoritative cosmetics)
+  loadout: Record<WeaponId, string>; // equipped skin id per weapon
 }
 
 /** Current house treasury balance (accumulated rake + demo fees). */
@@ -150,6 +169,7 @@ export interface PlayerSnapshot {
   health: number;
   ammo: number;
   weapon: WeaponId;
+  skin?: string; // equipped cosmetic skin id for the current weapon (others see it)
   reloading: boolean;
   alive: boolean;
   score: number;
@@ -184,6 +204,7 @@ export interface KillEvent {
   type: 'kill';
   killer: PlayerId;
   victim: PlayerId;
+  weapon?: WeaponId; // weapon used (kill-feed icon)
 }
 
 export interface RespawnEvent {

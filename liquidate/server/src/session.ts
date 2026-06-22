@@ -32,6 +32,8 @@ export function sendAccount(conn: Connection, bank: Bank, accountId: string): vo
     losses: a.losses,
     kills: a.kills,
     deaths: a.deaths,
+    owned: bank.ownedSkins(a.id),
+    loadout: bank.loadout(a.id),
   });
 }
 

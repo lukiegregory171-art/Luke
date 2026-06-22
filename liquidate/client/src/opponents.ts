@@ -5,6 +5,7 @@
  */
 
 import * as THREE from 'three';
+import type { WeaponId } from '@liquidate/shared';
 import { Opponent } from './opponent';
 
 export class Opponents {
@@ -21,13 +22,15 @@ export class Opponents {
     z: number,
     yaw: number,
     alive: boolean,
+    weapon?: WeaponId,
+    skinId?: string,
   ): void {
     let o = this.byId.get(id);
     if (!o) {
       o = new Opponent(this.scene);
       this.byId.set(id, o);
     }
-    o.pushFrame(serverTime, x, y, z, yaw, alive);
+    o.pushFrame(serverTime, x, y, z, yaw, alive, weapon, skinId);
   }
 
   /** Drop any avatars whose ids are no longer present (left the match). */

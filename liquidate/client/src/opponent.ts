@@ -9,6 +9,7 @@
  */
 
 import * as THREE from 'three';
+import { DEFAULT_WEAPON, type WeaponId } from '@liquidate/shared';
 import { Character } from './character';
 import { COLORS } from './palette';
 
@@ -26,9 +27,13 @@ const MAX_FRAMES = 40;
 export class Opponent {
   private readonly character: Character;
   private readonly buffer: Frame[] = [];
+  private weapon: WeaponId = DEFAULT_WEAPON;
+  private skinId?: string;
+  private appliedWeapon?: WeaponId;
+  private appliedSkin?: string;
 
   constructor(scene: THREE.Scene) {
-    // Enemy: dark body, RED team glow (locked readability).
+    // Enemy: dark visor, RED team body (locked readability).
     this.character = new Character(scene, { body: 0x0e1719, team: COLORS.red });
   }
 
@@ -54,9 +59,20 @@ export class Opponent {
     return f ? { x: f.x, z: f.z } : undefined;
   }
 
-  pushFrame(serverTime: number, x: number, y: number, z: number, yaw: number, alive: boolean): void {
+  pushFrame(
+    serverTime: number,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    alive: boolean,
+    weapon?: WeaponId,
+    skinId?: string,
+  ): void {
     this.buffer.push({ t: serverTime, x, y, z, yaw, alive });
     if (this.buffer.length > MAX_FRAMES) this.buffer.shift();
+    if (weapon) this.weapon = weapon;
+    this.skinId = skinId;
   }
 
   /** Render the opponent at the given (server-time) render moment. */
@@ -92,6 +108,14 @@ export class Opponent {
     this.character.place(x, y, z, yaw);
     this.character.setAlive(newer.alive);
     this.character.update(dt, speed);
+
+    // Apply the broadcast weapon + cosmetic skin when it changes (cheap; the
+    // model only rebuilds on a weapon switch).
+    if (this.weapon !== this.appliedWeapon || this.skinId !== this.appliedSkin) {
+      this.character.setHeld(this.weapon, this.skinId);
+      this.appliedWeapon = this.weapon;
+      this.appliedSkin = this.skinId;
+    }
   }
 }
 

@@ -144,7 +144,7 @@ export class Match {
         this.onHit(msg.shooter, msg.target, msg.headshot);
         break;
       case 'kill':
-        this.onKill(msg.killer, msg.victim);
+        this.onKill(msg.killer, msg.victim, msg.weapon);
         break;
       case 'respawn':
         if (msg.id === this.selfId) this.onSelfRespawn(msg.x, msg.y, msg.z, msg.yaw);
@@ -343,6 +343,7 @@ export class Match {
       }
       this.hud.setAmmo(self.ammo, WEAPONS[self.weapon].magazine);
       this.hud.setReloading(self.reloading);
+      this.weapon.setReloading(self.reloading);
       this.hud.setHealth(self.health);
       if (self.health < this.prevHealth) this.hud.damageFlash();
       this.prevHealth = self.health;
@@ -355,7 +356,7 @@ export class Match {
     for (const p of msg.players) {
       if (p.id === this.selfId) continue;
       present.add(p.id);
-      this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.y, p.z, p.yaw, p.alive);
+      this.opponents.pushFrame(p.id, msg.serverTime, p.x, p.y, p.z, p.yaw, p.alive, p.weapon, p.skin);
       // TDM: teammates glow GREEN, enemies RED (relative to you).
       if (this.mode === 'tdm') {
         const ally = this.teams[p.id] === this.selfTeam;
@@ -444,9 +445,9 @@ export class Match {
     }
   }
 
-  private onKill(killer: string, victim: string): void {
+  private onKill(killer: string, victim: string, weapon?: WeaponId): void {
     const label = (id: string): string => (id === this.selfId ? 'YOU' : 'OPP');
-    this.hud.addKill(label(killer), label(victim), this.lastHeadshot);
+    this.hud.addKill(label(killer), label(victim), this.lastHeadshot, weapon && WEAPONS[weapon].name);
     if (victim === this.selfId) {
       this.hud.banner('YOU DIED', 'bad');
       this.sfx.death();

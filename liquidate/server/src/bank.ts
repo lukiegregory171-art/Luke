@@ -18,11 +18,16 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
+  DEFAULT_OWNED_SKINS,
   DEPOSIT_FEE_BPS,
   STARTING_BALANCE,
   WITHDRAW_FEE_BPS,
   bpsOf,
+  defaultLoadout,
   rakeOf,
+  skinPrice,
+  weaponSkinById,
+  type WeaponId,
 } from '@liquidate/shared';
 
 const TREASURY = 'TREASURY';
@@ -65,6 +70,8 @@ export class Bank {
         losses INTEGER NOT NULL DEFAULT 0,
         kills INTEGER NOT NULL DEFAULT 0,
         deaths INTEGER NOT NULL DEFAULT 0,
+        owned_skins TEXT NOT NULL DEFAULT '[]',
+        loadout TEXT NOT NULL DEFAULT '{}',
         created_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS treasury (
@@ -82,6 +89,17 @@ export class Bank {
       );
       INSERT OR IGNORE INTO treasury (id, balance) VALUES (1, 0);
     `);
+    // Migrate older account tables that predate the cosmetics columns.
+    this.ensureColumn('accounts', 'owned_skins', "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn('accounts', 'loadout', "TEXT NOT NULL DEFAULT '{}'");
+  }
+
+  /** Add a column if it doesn't already exist (idempotent schema migration). */
+  private ensureColumn(table: string, column: string, decl: string): void {
+    const cols = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+    }
   }
 
   /** Create or load an account by handle, granting the starting balance once. */
@@ -180,6 +198,67 @@ export class Bank {
     return { fee, ok: true };
   }
 
+  // --- Cosmetics (server-authoritative ownership, DEMO currency) ------------
+
+  /** Skin ids this account owns — the free defaults are always implicitly owned. */
+  ownedSkins(id: string): string[] {
+    const row = this.db.prepare('SELECT owned_skins FROM accounts WHERE id = ?').get(id) as
+      | { owned_skins: string }
+      | undefined;
+    const bought = row ? (safeParse<string[]>(row.owned_skins, []) ?? []) : [];
+    return Array.from(new Set([...DEFAULT_OWNED_SKINS, ...bought]));
+  }
+
+  /** Equipped skin per weapon (defaults fill any unset/invalid slot). */
+  loadout(id: string): Record<WeaponId, string> {
+    const row = this.db.prepare('SELECT loadout FROM accounts WHERE id = ?').get(id) as
+      | { loadout: string }
+      | undefined;
+    const saved = row ? (safeParse<Record<string, string>>(row.loadout, {}) ?? {}) : {};
+    const out = defaultLoadout();
+    const owned = new Set(this.ownedSkins(id));
+    for (const [weapon, skinId] of Object.entries(saved)) {
+      const s = weaponSkinById(skinId);
+      // Only honour a saved choice that is a real, owned skin for that weapon.
+      if (s && s.weapon === weapon && owned.has(skinId)) out[weapon as WeaponId] = skinId;
+    }
+    return out;
+  }
+
+  /** Purchase a skin with DEMO credits (price → treasury). Server-validated. */
+  buySkin(id: string, skinId: string): { ok: boolean; reason?: string } {
+    const skin = weaponSkinById(skinId);
+    if (!skin) return { ok: false, reason: 'unknown skin' };
+    if (this.ownedSkins(id).includes(skinId)) return { ok: false, reason: 'already owned' };
+    const price = skinPrice(skin);
+    const acct = this.get(id);
+    if (!acct) return { ok: false, reason: 'no account' };
+    if (acct.balance < price) return { ok: false, reason: 'insufficient balance' };
+    this.db.transaction(() => {
+      if (price > 0) {
+        this.credit(id, -price, 'skin_buy', `buy ${skinId}`);
+        this.treasuryAdd(price, 'skin_revenue', `skin ${skinId}`);
+      }
+      const owned = this.ownedSkins(id);
+      owned.push(skinId);
+      this.db
+        .prepare('UPDATE accounts SET owned_skins = ? WHERE id = ?')
+        .run(JSON.stringify(Array.from(new Set(owned))), id);
+    })();
+    return { ok: true };
+  }
+
+  /** Equip an OWNED skin for its weapon. Cosmetic-only; rejects unowned skins. */
+  equipSkin(id: string, weapon: WeaponId, skinId: string): { ok: boolean; reason?: string } {
+    const skin = weaponSkinById(skinId);
+    if (!skin || skin.weapon !== weapon) return { ok: false, reason: 'invalid skin for weapon' };
+    if (!this.ownedSkins(id).includes(skinId)) return { ok: false, reason: 'not owned' };
+    const next = this.loadout(id);
+    next[weapon] = skinId;
+    this.db.prepare('UPDATE accounts SET loadout = ? WHERE id = ?').run(JSON.stringify(next), id);
+    return { ok: true };
+  }
+
   /**
    * Books check: the sum of every ledger delta must equal the sum of all
    * balances (accounts + treasury). True unless a balance was changed without a
@@ -238,5 +317,13 @@ export class Bank {
         'INSERT INTO ledger (ts, type, account, delta, balance_after, memo) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(Date.now(), type, account, delta, balanceAfter, memo);
+  }
+}
+
+function safeParse<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
   }
 }

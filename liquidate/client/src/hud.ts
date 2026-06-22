@@ -196,10 +196,11 @@ export class Hud {
     }
   }
 
-  addKill(killer: string, victim: string, headshot: boolean): void {
+  addKill(killer: string, victim: string, headshot: boolean, weapon?: string): void {
     const el = document.createElement('div');
     el.className = `kf${headshot ? ' head' : ''}`;
-    el.innerHTML = `<b>${killer}</b> ▸ <span class="vic">${victim}</span>`;
+    const wpn = weapon ? `<span class="kf-wpn">${weapon}</span>` : '▸';
+    el.innerHTML = `<b>${killer}</b> ${wpn} <span class="vic">${victim}</span>`;
     this.killfeed.appendChild(el);
     setTimeout(() => el.remove(), 4000);
     while (this.killfeed.childElementCount > 4) this.killfeed.firstElementChild?.remove();

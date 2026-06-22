@@ -40,6 +40,25 @@ vertical slice first, then expanded data-driven.
 Then expand per `MASTER_BUILD.md` "later" (Phase B/C), one data-driven feature
 at a time.
 
+## Weapons & cosmetic skins (data-driven)
+
+- **Distinct models:** each weapon archetype has its own multi-part low-poly
+  model + first-person pose in `client/src/weaponmodel.ts` (one builder, shared by
+  the viewmodel, the inspect turntable, and the third-person held weapon).
+- **Skins catalog:** `shared/src/weaponskins.ts` — many skins per weapon across a
+  6-tier rarity ladder (Common→Exotic). Treatments are **procedural** (finish /
+  emissive / anim / particle), so **adding a skin = one catalog entry**; the
+  client materials live in `client/src/skinmat.ts`.
+- **Cosmetic-only, always:** skins/models never touch stats, balance, or hit
+  detection (server hitboxes are spheres from feet — no skin parameter). The
+  locker, inspect, viewmodel and opponent rendering are pure presentation.
+- **Server-authoritative ownership:** the `Bank` (SQLite) owns each account's
+  `owned_skins` + `loadout`; `buySkin`/`equipSkin` are validated server-side
+  (can't equip what you don't own; buying spends DEMO currency). The equipped
+  skin id is broadcast in snapshots so others see it. Invariants are covered by
+  `tests/weaponskins.test.ts`. **DEMO/devnet only — never real money, never
+  pay-to-win.**
+
 ## Hard rules (do not violate)
 
 1. **No real money, ever.** The economy is play-money integers only. No

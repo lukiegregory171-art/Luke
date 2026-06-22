@@ -91,6 +91,56 @@ hook: a thin dark toon outline on characters/weapons, off on Low — perf-cheap.
 - Keep the crypto/economy info (balance, frags, rake) presented in this bright
   arcade style.
 
+## Weapons (distinct, stylised — Rivals-tier, not realistic)
+
+Each archetype has its **own multi-part low-poly model** with a clearly different
+silhouette (built in `client/src/weaponmodel.ts`, forward = −Z) — receiver,
+barrel, magazine, grip, stock, sight/rail, muzzle, scope where relevant — plus
+its **own first-person hold pose**, reload dip, and shot sound:
+
+- **Pistol** — small, short barrel, compact.
+- **SMG** — stubby body, short barrel, tall extended magazine; fast/snappy.
+- **Assault** — longer receiver, stock, mid barrel, rail + sight.
+- **Sniper** — very long barrel, big scope, stock; long thin silhouette.
+- **Shotgun** — wide chunky body, wide barrel, pump; short and wide.
+- **LMG** — bulky receiver, heavy barrel, big ammo box.
+- **Marksman** — medium body + mid scope (between assault and sniper).
+
+Keep them **chunky, clean, flat-shaded stylised** — NOT photoreal (realism would
+clash with the bright flat world).
+
+## Weapon skins (cosmetic, data-driven, rarity ladder)
+
+Roblox-Rivals-style skins: many per weapon, all **procedural** (material-driven,
+no per-skin textures) so a new skin is **one catalog entry** in
+`shared/src/weaponskins.ts`. A skin is data only:
+`{ id, weapon, name, rarity, base, secondary, finish, emissive?, emissiveColor?, anim?, particle? }`.
+
+Flair escalates with rarity (signature UI colour per tier):
+
+| Rarity | Colour | Treatment |
+| --- | --- | --- |
+| Common | grey `#9aa7b0` | single solid recolour, matte (free default) |
+| Uncommon | green `#3fbf6b` | two-tone, slight metalness |
+| Rare | blue `#3f8efc` | metallic / chrome / camo + accent |
+| Epic | purple `#a35bff` | bold pattern + emissive accent parts |
+| Legendary | gold `#f5b73d` | animated emissive (pulse/flow) + gold/chrome + sparkle |
+| Exotic | magenta `#ff4dd2` | rainbow/animated shader + particle aura — showpiece |
+
+**Hard rules (non-negotiable):**
+
+- **Cosmetic-only.** A skin/model NEVER changes stats, balance, or hit detection
+  (hitboxes are server-side spheres from feet position — there is no skin
+  parameter). Asserted in `tests/weaponskins.test.ts`.
+- **Server-authoritative ownership.** Accounts own skins server-side (SQLite);
+  you can only equip what you own, and buying is a validated DEMO-currency
+  transaction. A modified client can't grant itself skins — at most it changes
+  how its own gun looks to itself.
+- **Applied everywhere:** first-person viewmodel, the third-person held weapon
+  other players see (broadcast `skin` id in the snapshot), and the kill-feed.
+- **DEMO play-money only** for pricing/unlocks; optional Solana **devnet**
+  cosmetic token later, behind a flag. **Never real money, never pay-to-win.**
+
 ## Game feel constants (tune from here)
 
 - Move ~**8.5 u/s**, FOV **80**, fast TTK.

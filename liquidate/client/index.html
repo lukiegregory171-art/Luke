@@ -172,9 +172,12 @@
         <button id="play-again">BACK TO LOBBY</button>
       </div>
 
-      <!-- Arsenal / cosmetics inventory with 3D inspect -->
+      <!-- Arsenal locker: weapons grid + rarity skin tiles + 3D inspect -->
       <div class="overlay-card hidden inventory" id="card-inventory">
-        <h1 class="small">ARSENAL</h1>
+        <div class="locker-head">
+          <h1 class="small">ARSENAL</h1>
+          <span id="locker-balance" class="balance">—</span>
+        </div>
         <div class="inv-body">
           <div class="inv-viewport">
             <canvas id="inspect-canvas"></canvas>
@@ -182,16 +185,19 @@
             <div id="inv-req" class="inv-req"></div>
           </div>
           <div class="inv-side">
+            <div class="lobby-label">WEAPON</div>
+            <div id="locker-weapons" class="locker-weapons"></div>
             <div class="lobby-label">SKINS</div>
             <div id="inv-skins" class="inv-skins"></div>
-            <p class="footnote">
-              Skins are cosmetic-only and client-side — never sent to the server, never change how
-              an opponent looks to you. No pay-to-win.
-            </p>
             <div class="btn-row">
+              <button id="inv-buy" class="hidden">BUY</button>
               <button id="inv-equip">EQUIP</button>
               <button id="inv-close" class="ghost">CLOSE</button>
             </div>
+            <p class="footnote">
+              Skins are cosmetic-only — server-authoritative ownership, bought with DEMO play-money.
+              They never change stats, hits, or how an opponent looks to you. No pay-to-win.
+            </p>
           </div>
         </div>
       </div>

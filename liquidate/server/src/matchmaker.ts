@@ -14,7 +14,14 @@
  * there's no economy and no stat-farming; ranked/paid play stays humans-only.
  */
 
-import { FFA_SIZE, type ClientMessage, type GameMap, type MatchMode } from '@liquidate/shared';
+import {
+  FFA_SIZE,
+  defaultLoadout,
+  type ClientMessage,
+  type GameMap,
+  type MatchMode,
+  type WeaponId,
+} from '@liquidate/shared';
 import { randomUUID } from 'node:crypto';
 import type { Connection } from './connection';
 import type { Bank } from './bank';
@@ -282,10 +289,14 @@ export class Matchmaker {
     // The onResult closure needs the ctx, which needs the room — break the cycle
     // with a stable holder (also keeps working across reconnects).
     const ref: { ctx?: RoomCtx } = {};
+    const loadouts: Record<WeaponId, string>[] = sessions.map((s) =>
+      s.accountId ? this.bank.loadout(s.accountId) : defaultLoadout(),
+    );
     const room = new Room(
       sessions.map((s) => s.conn),
       sessions.map((s) => s.handle ?? 'Player'),
       teams,
+      loadouts,
       this.pickMap(),
       {
         targetKills: this.targetKillsFor(mode),

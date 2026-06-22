@@ -49,6 +49,7 @@ function harness() {
     fireMany: vi.fn(),
     update: vi.fn(),
     setWeapon: vi.fn(),
+    setReloading: vi.fn(),
   } as unknown as Weapon;
   const hud = {
     setScores: vi.fn(),

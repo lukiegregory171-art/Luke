@@ -1,20 +1,24 @@
 /**
- * First-person weapon viewmodel plus shot feedback: muzzle flash, fading
- * tracer beams, recoil kick, and movement bob + look sway. Purely cosmetic —
- * the authoritative hit math lives in @liquidate/shared.
+ * First-person weapon viewmodel plus shot feedback: a distinct per-archetype
+ * model (see weaponmodel.ts), muzzle flash, fading tracer beams, recoil kick,
+ * movement bob + look sway, a per-weapon hold pose, and a reload dip. Purely
+ * cosmetic — the authoritative hit math lives in @liquidate/shared.
  *
- * P1: tracers are pooled. A fixed set of meshes shares ONE unit-cylinder
- * geometry (scaled along its length per shot) so firing allocates nothing — no
- * geometry/material/Vector3 churn mid-match, no GC hitches. Reused scratch
- * vectors keep the hot path allocation-free.
+ * Part B: the equipped cosmetic SKIN repaints the model's materials (base /
+ * secondary / emissive) and can animate them; `setSkin` rebuilds the model with
+ * the skin's materials. Skins are client-local presentation and never affect aim
+ * or hits.
  *
- * P3: the viewmodel bobs with movement speed and sways opposite to look motion
- * (both visual-only; aim is input.yaw/pitch, untouched here).
+ * P1: tracers are pooled — a fixed set of meshes shares ONE unit-cylinder
+ * geometry (scaled per shot) so firing allocates nothing.
  */
 
 import * as THREE from 'three';
 import { clamp, MOVE_SPEED, type Vec3, type WeaponId } from '@liquidate/shared';
 import { Pool } from './pool';
+import { buildWeaponModel, VIEWMODEL_POSE, type WeaponModel } from './weaponmodel';
+import { skinMaterials, type SkinPaint } from './skinmat';
+import { defaultSkinFor, weaponSkinById, type WeaponSkin } from '@liquidate/shared';
 
 /** Per-frame view motion that drives bob (speed) and sway (look delta). */
 export interface ViewMotion {
@@ -32,20 +36,18 @@ interface Tracer {
 const TRACER_LIFE = 0.07;
 const TRACER_PREWARM = 24; // covers a shotgun blast + overlapping rifle fire
 const UP = new THREE.Vector3(0, 1, 0);
-const ACCENT_DEFAULT = 0x2bd96b; // bright brand green
-const GUN_BODY = 0x3a4754; // blocky slate weapon body
 const TRACER_BASE = 0xbafff0;
 const WHITE = new THREE.Color(0xffffff);
 
-/** Per-weapon viewmodel feel: muzzle-flash scale + a distinct silhouette. */
-const VIEWMODEL: Record<WeaponId, { flash: number; scale: [number, number, number] }> = {
-  assault: { flash: 1, scale: [1, 1, 1] },
-  smg: { flash: 0.8, scale: [0.85, 0.9, 0.8] },
-  sniper: { flash: 1.8, scale: [1, 1, 1.35] },
-  shotgun: { flash: 1.6, scale: [1.2, 1.05, 0.85] },
-  pistol: { flash: 0.7, scale: [0.75, 0.8, 0.7] },
-  lmg: { flash: 1.2, scale: [1.15, 1.15, 1.1] },
-  marksman: { flash: 1.5, scale: [1, 1, 1.2] },
+/** Per-weapon muzzle-flash scale (heavier guns flash bigger). */
+const FLASH_SCALE: Record<WeaponId, number> = {
+  assault: 1,
+  smg: 0.8,
+  sniper: 1.8,
+  shotgun: 1.6,
+  pistol: 0.7,
+  lmg: 1.2,
+  marksman: 1.5,
 };
 
 export class Weapon {
@@ -53,14 +55,18 @@ export class Weapon {
   private readonly muzzle = new THREE.Object3D();
   private readonly flash: THREE.Mesh;
   private readonly flashLight: THREE.PointLight;
-  private readonly accentMat: THREE.MeshStandardMaterial;
 
-  // Skin accent (P4): the viewmodel's energy bits + tracers retint to this.
-  private accentValue = ACCENT_DEFAULT;
+  private weaponId: WeaponId = 'assault';
+  private model?: WeaponModel;
+  private paint: SkinPaint;
+  private skin: WeaponSkin;
+  private loadout: Partial<Record<WeaponId, string>> = {};
+
+  // Skin accent (P4): tracers retint to this; UI/arena use the same hue.
+  private accentValue = 0x2bd96b;
   private readonly tracerColor = new THREE.Color(TRACER_BASE);
 
-  // Pooled tracers: one shared geometry, per-mesh material, all parented to a
-  // group that stays in the scene; we toggle visibility rather than add/remove.
+  // Pooled tracers.
   private readonly tracerGroup = new THREE.Group();
   private readonly tracerGeo: THREE.CylinderGeometry;
   private readonly tracerPool: Pool<Tracer>;
@@ -71,14 +77,15 @@ export class Weapon {
   private readonly vTo = new THREE.Vector3();
   private readonly vDir = new THREE.Vector3();
 
-  // Recoil state (smoothly returns to zero).
+  // Recoil + reload state.
   private recoil = 0;
   private flashScale = 1;
+  private reloadTarget = 0;
+  private reloadAmount = 0;
 
-  // Viewmodel rest pose + bob/sway state (P3, cosmetic).
-  private readonly baseX = 0.22;
-  private readonly baseY = -0.2;
-  private readonly baseZ = -0.45;
+  // Per-weapon hold pose + bob/sway state (cosmetic).
+  private base = new THREE.Vector3(0.22, -0.2, -0.45);
+  private poseRot = new THREE.Euler(0, 0, 0);
   private bobPhase = 0;
   private swayX = 0;
   private swayY = 0;
@@ -90,39 +97,11 @@ export class Weapon {
     private readonly scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
   ) {
-    // Build a simple blocky rifle out of a few boxes, parented to the camera
-    // (ARTBIBLE bright arcade: low-poly slate body + a bold SOLID accent — no
-    // neon glow).
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: GUN_BODY,
-      flatShading: true,
-      roughness: 0.85,
-      metalness: 0,
-    });
-    this.accentMat = new THREE.MeshStandardMaterial({
-      color: ACCENT_DEFAULT,
-      flatShading: true,
-      emissive: ACCENT_DEFAULT,
-      emissiveIntensity: 0.35,
-      roughness: 0.5,
-    });
-    const accentMat = this.accentMat;
-
-    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.5), bodyMat);
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.45), bodyMat);
-    barrel.position.set(0, 0.01, -0.42);
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.12), accentMat);
-    sight.position.set(0, 0.09, -0.05);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), bodyMat);
-    grip.position.set(0, -0.13, 0.12);
-
-    this.group.add(receiver, barrel, sight, grip);
-    this.group.position.set(0.22, -0.2, -0.45);
+    // Start on the default weapon with its default (Common) skin.
+    this.skin = defaultSkinFor('assault');
+    this.paint = skinMaterials(this.skin);
+    this.buildModel('assault');
     this.camera.add(this.group);
-
-    // Muzzle point at the end of the barrel (world position used for tracers).
-    this.muzzle.position.set(0, 0.01, -0.66);
-    this.group.add(this.muzzle);
 
     // Muzzle flash quad (hidden until a shot).
     this.flash = new THREE.Mesh(
@@ -135,18 +114,16 @@ export class Weapon {
         depthWrite: false,
       }),
     );
-    this.flash.position.copy(this.muzzle.position);
     this.group.add(this.flash);
 
     this.flashLight = new THREE.PointLight(0xffd27f, 0, 8);
-    this.flashLight.position.copy(this.muzzle.position);
     this.group.add(this.flashLight);
+    this.placeMuzzle();
 
     // Camera must be in the scene graph for its children to render.
     this.scene.add(this.camera);
 
-    // Tracer pool: a unit cylinder (length 1 along +Y, open-ended) scaled per
-    // shot; each pooled mesh owns its material so it can fade independently.
+    // Tracer pool: a unit cylinder scaled per shot; each mesh owns its material.
     this.scene.add(this.tracerGroup);
     this.tracerGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 6, 1, true);
     this.tracerPool = new Pool<Tracer>(
@@ -160,7 +137,7 @@ export class Weapon {
         });
         const mesh = new THREE.Mesh(this.tracerGeo, mat);
         mesh.visible = false;
-        mesh.frustumCulled = false; // thin + always near camera; skip the cull test
+        mesh.frustumCulled = false;
         this.tracerGroup.add(mesh);
         return { mesh, age: 0, life: TRACER_LIFE };
       },
@@ -172,28 +149,85 @@ export class Weapon {
     );
   }
 
+  /** (Re)build the model for `id` using the current skin paint + set its pose. */
+  private buildModel(id: WeaponId): void {
+    if (this.model) {
+      for (const m of this.model.body) m.geometry.dispose();
+      for (const m of this.model.accent) m.geometry.dispose();
+      this.group.remove(this.model.group);
+    }
+    this.weaponId = id;
+    this.flashScale = FLASH_SCALE[id];
+    this.model = buildWeaponModel(id, this.paint.body, this.paint.accent);
+    this.group.add(this.model.group);
+    this.paint.decorate(this.model.group); // attach particle fx, if any
+
+    const pose = VIEWMODEL_POSE[id];
+    this.base.set(pose.pos[0], pose.pos[1], pose.pos[2]);
+    this.poseRot.set(pose.rot[0], pose.rot[1], pose.rot[2]);
+    this.group.scale.setScalar(pose.scale);
+    this.placeMuzzle();
+  }
+
+  /** Position the muzzle anchor (+ flash) at the current model's barrel tip. */
+  private placeMuzzle(): void {
+    const m = this.model?.muzzle ?? { x: 0, y: 0.01, z: -0.5 };
+    this.muzzle.position.set(m.x, m.y, m.z);
+    if (this.muzzle.parent !== this.group) this.group.add(this.muzzle);
+    this.flash?.position.copy(this.muzzle.position);
+    this.flashLight?.position.copy(this.muzzle.position);
+  }
+
   /** World-space position of the muzzle, for spawning a tracer. */
   muzzleWorldPosition(out = new THREE.Vector3()): THREE.Vector3 {
     return this.muzzle.getWorldPosition(out);
   }
 
-  /** Switch the viewmodel's weapon: muzzle-flash size + a distinct silhouette. */
+  /** Switch the viewmodel's weapon, applying that weapon's equipped skin. */
   setWeapon(id: WeaponId): void {
-    const vm = VIEWMODEL[id];
-    this.flashScale = vm.flash;
-    this.group.scale.set(vm.scale[0], vm.scale[1], vm.scale[2]);
+    if (id === this.weaponId && this.model) return;
+    this.applySkin(this.skinFor(id));
+  }
+
+  /** Equip a player's per-weapon skin loadout (weapon id -> skin id). */
+  setLoadout(loadout: Partial<Record<WeaponId, string>>): void {
+    this.loadout = { ...loadout };
+    this.applySkin(this.skinFor(this.weaponId));
+  }
+
+  /** Equip a specific skin now (used by previews). Client-local cosmetic. */
+  setSkin(skin: WeaponSkin): void {
+    this.applySkin(skin);
+  }
+
+  /** Resolve the equipped skin for a weapon from the loadout (or its default). */
+  private skinFor(id: WeaponId): WeaponSkin {
+    const owned = this.loadout[id];
+    const s = owned ? weaponSkinById(owned) : undefined;
+    return s && s.weapon === id ? s : defaultSkinFor(id);
   }
 
   /**
-   * Retint the viewmodel's accent + tracers to a skin colour (P4). Cosmetic and
-   * client-local — never sent to the server, never affects aim or hits. Tracers
-   * use a lightened accent so they stay readable on any skin.
+   * Rebuild the model's materials from a skin (base / secondary / finish /
+   * emissive / animation). Client-local — never sent to the server, never affects
+   * aim or hits.
+   */
+  private applySkin(skin: WeaponSkin): void {
+    const old = this.paint;
+    this.skin = skin;
+    this.paint = skinMaterials(skin);
+    this.setAccent(this.paint.accentHex); // tracers read on-theme
+    this.buildModel(skin.weapon);
+    old.dispose(); // free the previous skin's materials/fx after the rebuild
+  }
+
+  /**
+   * Retint the tracer colour to a hue (P4). Cosmetic and client-local. Tracers
+   * use a lightened accent so they stay readable on any colour.
    */
   setAccent(hex: number): void {
     this.accentValue = hex;
     const c = new THREE.Color(hex);
-    this.accentMat.color.copy(c);
-    this.accentMat.emissive.copy(c).multiplyScalar(0.35);
     this.tracerColor.copy(c).lerp(WHITE, 0.5);
   }
 
@@ -205,6 +239,11 @@ export class Weapon {
   /** Current tracer colour as 0xRRGGBB (for tests / inspection). */
   get tracerColorHex(): number {
     return this.tracerColor.getHex();
+  }
+
+  /** Drive the reload dip (call with the authoritative reloading flag). */
+  setReloading(reloading: boolean): void {
+    this.reloadTarget = reloading ? 1 : 0;
   }
 
   private flashAndKick(kick: number): void {
@@ -244,7 +283,6 @@ export class Weapon {
 
     const t = this.tracerPool.acquire();
     const mesh = t.mesh;
-    // Position at the midpoint, orient +Y along the shot, scale Y to length.
     mesh.position.copy(from).addScaledVector(this.vDir, 0.5);
     mesh.quaternion.setFromUnitVectors(UP, this.vDir.divideScalar(len));
     mesh.scale.set(1, len, 1);
@@ -268,8 +306,12 @@ export class Weapon {
     if (this.flashLight.intensity > 0)
       this.flashLight.intensity = Math.max(0, this.flashLight.intensity - (dt / 0.04) * 6);
 
-    // Recoil recovery.
+    // Recoil recovery + reload dip easing.
     this.recoil = Math.max(0, this.recoil - dt * 0.8);
+    this.reloadAmount += (this.reloadTarget - this.reloadAmount) * Math.min(1, dt * 9);
+
+    // Animate the skin (pulse/flow/rainbow + particle aura), if any.
+    this.paint.update?.(dt);
 
     // Movement bob: a figure-eight that scales with speed.
     const speed = motion?.speed ?? 0;
@@ -278,8 +320,7 @@ export class Weapon {
     const bobX = Math.sin(this.bobPhase) * 0.012 * run;
     const bobY = Math.abs(Math.sin(this.bobPhase * 2)) * 0.014 * run;
 
-    // Look sway: ease toward an offset opposite the turn; returns to rest when
-    // the view is still (target collapses to 0). Cosmetic — aim is unaffected.
+    // Look sway: ease toward an offset opposite the turn; returns to rest.
     let targetX = 0;
     let targetY = 0;
     if (motion) {
@@ -295,16 +336,19 @@ export class Weapon {
     this.swayX += (targetX - this.swayX) * ks;
     this.swayY += (targetY - this.swayY) * ks;
 
+    const dip = this.reloadAmount;
     this.group.position.set(
-      this.baseX + bobX + this.swayX,
-      this.baseY + bobY + this.swayY,
-      this.baseZ + this.recoil,
+      this.base.x + bobX + this.swayX,
+      this.base.y + bobY + this.swayY - dip * 0.12,
+      this.base.z + this.recoil,
     );
-    this.group.rotation.x = this.recoil * 1.2;
-    this.group.rotation.y = this.swayX * 1.6;
+    this.group.rotation.set(
+      this.poseRot.x + this.recoil * 1.2 + dip * 0.5,
+      this.poseRot.y + this.swayX * 1.6 - dip * 0.3,
+      this.poseRot.z,
+    );
 
-    // Fade active tracers; collect the expired and release them back to the pool
-    // (no allocation — `expired` is a reused buffer).
+    // Fade active tracers; release the expired (reused buffer, no allocation).
     this.expired.length = 0;
     this.tracerPool.forEachActive((t) => {
       t.age += dt;

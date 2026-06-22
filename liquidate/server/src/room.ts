@@ -28,6 +28,7 @@ import {
   TICK_DT,
   WEAPONS,
   WEAPON_SWITCH_TIME,
+  defaultLoadout,
   freshMagazines,
   aimDirection,
   clamp,
@@ -73,6 +74,7 @@ interface PlayerSim {
   pitch: number;
   health: number;
   weapon: WeaponId;
+  loadout: Record<WeaponId, string>; // equipped skin per weapon (cosmetic broadcast)
   ammo: Record<WeaponId, number>;
   reloading: boolean;
   reloadTimer: number;
@@ -90,6 +92,10 @@ function fullAmmo(): Record<WeaponId, number> {
   return freshMagazines();
 }
 
+function freshLoadout(): Record<WeaponId, string> {
+  return defaultLoadout();
+}
+
 export class Room {
   private readonly players: PlayerSim[];
   private readonly mode: MatchMode;
@@ -102,6 +108,7 @@ export class Room {
     conns: Connection[],
     names: string[],
     teams: number[],
+    loadouts: Record<WeaponId, string>[],
     private readonly map: GameMap,
     private readonly opts: RoomOptions,
     private readonly stake: number,
@@ -112,10 +119,18 @@ export class Room {
     ) => void,
   ) {
     this.mode = opts.mode;
-    this.players = conns.map((c, i) => this.makePlayer(c, names[i] ?? c.id, teams[i] ?? 0, i));
+    this.players = conns.map((c, i) =>
+      this.makePlayer(c, names[i] ?? c.id, teams[i] ?? 0, loadouts[i] ?? freshLoadout(), i),
+    );
   }
 
-  private makePlayer(conn: Connection, name: string, team: number, spawnIndex: number): PlayerSim {
+  private makePlayer(
+    conn: Connection,
+    name: string,
+    team: number,
+    loadout: Record<WeaponId, string>,
+    spawnIndex: number,
+  ): PlayerSim {
     const spawn = this.map.spawns[spawnIndex % this.map.spawns.length];
     return {
       conn,
@@ -128,6 +143,7 @@ export class Room {
       pitch: 0,
       health: MAX_HEALTH,
       weapon: DEFAULT_WEAPON,
+      loadout,
       ammo: fullAmmo(),
       reloading: false,
       reloadTimer: 0,
@@ -429,7 +445,12 @@ export class Room {
         target.alive = false;
         target.respawnTimer = this.opts.respawnDelay;
         shooter.score++;
-        this.broadcast({ type: 'kill', killer: shooter.conn.id, victim: target.conn.id });
+        this.broadcast({
+          type: 'kill',
+          killer: shooter.conn.id,
+          victim: target.conn.id,
+          weapon: shooter.weapon,
+        });
         if (this.mode === 'tdm') {
           this.teamScores[shooter.team] = (this.teamScores[shooter.team] ?? 0) + 1;
           if (this.teamScores[shooter.team] >= this.opts.targetKills) {
@@ -550,6 +571,7 @@ export class Room {
       health: p.health,
       ammo: p.ammo[p.weapon],
       weapon: p.weapon,
+      skin: p.loadout[p.weapon],
       reloading: p.reloading,
       alive: p.alive,
       score: p.score,
