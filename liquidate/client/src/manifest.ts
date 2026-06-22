@@ -28,4 +28,7 @@ export const MANIFEST: AssetManifest = [
   { id: 'env-cloud', url: '/assets/env/cloud.glb', category: 'prop', preload: true },
   { id: 'env-grass', url: '/assets/env/grass.glb', category: 'prop', preload: true },
   { id: 'env-flag', url: '/assets/env/flag.glb', category: 'prop', preload: true },
+  // Square slab used to dress raised CATWALK platforms (floating obstacles) with
+  // real art, scaled to the obstacle footprint (see world.ts).
+  { id: 'env-platform', url: '/assets/env/platform.glb', category: 'prop', preload: true },
 ];

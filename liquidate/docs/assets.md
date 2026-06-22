@@ -135,10 +135,21 @@ the simple `shared/` obstacles, so "what you see is what you collide with" holds
 clouds sit above the wall line, grass/flags hug the perimeter, never the interior
 play space (`tests/env.test.ts` enforces this for both dressing and props).
 
-**Still to add:** richer modular building/ramp kits + true verticality (which
-means collidable platforms in `shared/` map data, server-authoritative), and
-`.ktx2`-textured PBR floor/wall materials. Drop kits into
-`client/assets/raw/environment/` and optimise with `scripts/optimize-gltf.mjs`.
+**Verticality (real, server-authoritative):** "Trading Floor" now has a true
+upper level — raised CATWALK obstacles (`box(..., y=2.2)`) that FLOAT at 2.2–2.6.
+You walk under them on the ground and hop onto them from the 1.4 corner perches
+(a 1.2 climb, under the ~1.7 jump height) or with the jetpack. They are dressed
+with the CC0 Kenney `platform` slab, scaled to the obstacle footprint with its
+walkable top aligned to the collidable top (`world.dressPlatforms`), so "what you
+see is what you collide with" holds. Reachability + walk-under clearance are
+guarded by `tests/maps.test.ts`. The collision is still just the AABBs in
+`shared/`; the height-aware movement (stand-on / walk-under) was already there.
+
+**Still to add:** the same upper-level treatment on the other maps, richer
+modular building kits, real ramps (the AABB collision is box-only, so ramps are
+currently stepped platforms), and `.ktx2`-textured PBR floor/wall materials. Drop
+kits into `client/assets/raw/environment/` and optimise with
+`scripts/optimize-gltf.mjs`.
 
 ## Skins (P4)
 

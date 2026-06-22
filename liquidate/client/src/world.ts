@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import type { GameMap } from '@liquidate/shared';
+import type { AABB, GameMap } from '@liquidate/shared';
 import {
   QUALITY,
   initialQuality,
@@ -58,6 +58,9 @@ export class World {
   // Skin accent (P4): crate edges + dressing trim retint to this. Cosmetic only.
   private accent: number = COLORS.green;
   private accentMats: THREE.Material[] = [];
+  // Shared cover materials (reused by the platform fallback path).
+  private crateMat?: THREE.Material;
+  private edgeMat?: THREE.LineBasicMaterial;
 
   constructor(
     private readonly container: HTMLElement,
@@ -192,6 +195,8 @@ export class World {
       const get = (id: string): THREE.Object3D | null => this.assets!.get(`env-${id}`);
       this.propsGroup.add(buildProps(map, get));
     }
+    // Raised catwalks: real platform models (or a procedural block fallback).
+    this.dressPlatforms(map);
     this.setAccent(this.accent); // retint accents to the active skin
 
     this.core.position.set(0, map.wallHeight + 1.8, 0);
@@ -249,27 +254,76 @@ export class World {
 
     // Cover crates: solid bright accent-coloured block + a coloured edge that
     // retints to the active skin (gives the clean "outlined block" arcade pop).
-    const crateMat = solid(theme.obstacle, 0.15);
-    const edgeMat = new THREE.LineBasicMaterial({ color: this.accent });
-    this.accentMats.push(edgeMat);
+    // RAISED platforms (min.y > 0) are skipped here and dressed with real CC0
+    // platform models in dressPlatforms() (procedural block as the fallback).
+    this.crateMat = solid(theme.obstacle, 0.15);
+    this.edgeMat = new THREE.LineBasicMaterial({ color: this.accent });
+    this.accentMats.push(this.edgeMat);
     for (const box of map.obstacles) {
-      const sx = box.max.x - box.min.x;
-      const sy = box.max.y - box.min.y;
-      const sz = box.max.z - box.min.z;
-      const geo = new THREE.BoxGeometry(sx, sy, sz);
-      const mesh = new THREE.Mesh(geo, crateMat);
-      mesh.position.set(
-        (box.min.x + box.max.x) / 2,
-        (box.min.y + box.max.y) / 2,
-        (box.min.z + box.max.z) / 2,
-      );
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.arena.add(mesh);
+      if (box.min.y > 0.01) continue; // raised catwalk → dressed separately
+      this.addCrate(box);
+    }
+  }
 
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
-      edges.position.copy(mesh.position);
-      this.arena.add(edges);
+  /** Render one ground-cover crate (solid block + outlined edges) into the arena. */
+  private addCrate(box: AABB): void {
+    const sx = box.max.x - box.min.x;
+    const sy = box.max.y - box.min.y;
+    const sz = box.max.z - box.min.z;
+    const geo = new THREE.BoxGeometry(sx, sy, sz);
+    const mesh = new THREE.Mesh(geo, this.crateMat!);
+    mesh.position.set(
+      (box.min.x + box.max.x) / 2,
+      (box.min.y + box.max.y) / 2,
+      (box.min.z + box.max.z) / 2,
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.arena.add(mesh);
+
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), this.edgeMat!);
+    edges.position.copy(mesh.position);
+    this.arena.add(edges);
+  }
+
+  /**
+   * Dress RAISED platforms (floating obstacles, min.y > 0) with a real CC0
+   * square-slab model scaled to the obstacle's footprint, its walkable top
+   * aligned to the collidable top (so "what you see is what you collide with").
+   * Clones share cached geometry → they go in propsGroup (cleared, not disposed).
+   * Falls back to a procedural block if the model isn't resident.
+   */
+  private dressPlatforms(map: GameMap): void {
+    const nb = new THREE.Box3();
+    const ns = new THREE.Vector3();
+    const nc = new THREE.Vector3();
+    for (const box of map.obstacles) {
+      if (box.min.y <= 0.01) continue; // ground cover handled by buildArena
+      const glb = this.assets?.get('env-platform') ?? null;
+      if (!glb) {
+        this.addCrate(box); // procedural fallback (into the arena)
+        continue;
+      }
+      const sx = box.max.x - box.min.x;
+      const sz = box.max.z - box.min.z;
+      const cx = (box.min.x + box.max.x) / 2;
+      const cz = (box.min.z + box.max.z) / 2;
+      nb.setFromObject(glb);
+      nb.getSize(ns);
+      nb.getCenter(nc);
+      const fx = sx / (ns.x || 1);
+      const fz = sz / (ns.z || 1);
+      glb.scale.set(fx, 1, fz);
+      // Align the model's top to the collidable top; centre it on the footprint.
+      glb.position.set(cx - nc.x * fx, box.max.y - nb.max.y, cz - nc.z * fz);
+      glb.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.castShadow = true;
+          m.receiveShadow = true;
+        }
+      });
+      this.propsGroup.add(glb);
     }
   }
 

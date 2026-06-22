@@ -201,8 +201,13 @@ export const DATACENTER: GameMap = {
 };
 
 /**
- * "Trading Floor" — a central "ticker tower" you can parkour onto via low step
- * platforms, with corner perches and flank walls. King-of-the-hill verticality.
+ * "Trading Floor" — TWO-LEVEL king-of-the-hill. A central "ticker tower" (top at
+ * 2.6) is ringed by raised CATWALKS (also at 2.6) that you reach by hopping from
+ * the 1.4 corner perches (a 1.2 climb, under the ~1.7 jump height) or with the
+ * jetpack. The catwalks FLOAT (their underside is at 2.2), so you fight both on
+ * the ground beneath them and on the upper ring above — real verticality. The
+ * elevated slabs are non-cover at ground level (you walk under) and are dressed
+ * with real CC0 platform models. Collision is still just these AABBs.
  */
 export const TRADING_FLOOR: GameMap = {
   id: 'tradingfloor',
@@ -217,11 +222,17 @@ export const TRADING_FLOOR: GameMap = {
     box(3.5, 0, 2, 2, 1.0),
     box(0, -3.5, 2, 2, 1.0),
     box(0, 3.5, 2, 2, 1.0),
-    // Corner perches (jumpable vantage).
+    // Corner perches (jumpable vantage — the on-ramp to the upper ring).
     box(-10, -10, 2.5, 2.5, 1.4),
     box(10, 10, 2.5, 2.5, 1.4),
     box(10, -10, 2.5, 2.5, 1.4),
     box(-10, 10, 2.5, 2.5, 1.4),
+    // Raised CATWALKS (float at y 2.2..2.6): the upper level. Walk under them at
+    // ground; hop onto them from the perches; cross to the tower. 0.4 thick.
+    box(-7, -7, 3, 3, 0.4, 2.2),
+    box(7, 7, 3, 3, 0.4, 2.2),
+    box(7, -7, 3, 3, 0.4, 2.2),
+    box(-7, 7, 3, 3, 0.4, 2.2),
     // Flank walls.
     box(-15, 0, 1.5, 7, 2.2),
     box(15, 0, 1.5, 7, 2.2),
