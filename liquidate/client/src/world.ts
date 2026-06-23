@@ -242,6 +242,10 @@ export class World {
     const h = map.wallHeight;
     const t = 0.4;
     const wallMat = matte(theme.wall);
+    // Skin-tinted edge material, shared by walls + crates for a consistent
+    // "outlined arcade" pop (retinted by setAccent).
+    this.edgeMat = new THREE.LineBasicMaterial({ color: this.accent });
+    this.accentMats.push(this.edgeMat);
     const walls: [number, number, number, number][] = [
       [0, -halfD, map.width, t],
       [0, halfD, map.width, t],
@@ -249,21 +253,23 @@ export class World {
       [halfW, 0, t, map.depth],
     ];
     for (const [cx, cz, sx, sz] of walls) {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(sx, h, sz), wallMat);
+      const geo = new THREE.BoxGeometry(sx, h, sz);
+      const wall = new THREE.Mesh(geo, wallMat);
       wall.position.set(cx, h / 2, cz);
       wall.castShadow = true;
       wall.receiveShadow = true;
       this.arena.add(wall);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), this.edgeMat);
+      edges.position.copy(wall.position);
+      this.arena.add(edges);
     }
     this.addTickerPanels(map);
 
-    // Cover crates: solid bright accent-coloured block + a coloured edge that
-    // retints to the active skin (gives the clean "outlined block" arcade pop).
+    // Cover crates: solid bright accent-coloured block + the shared coloured edge
+    // (created above with the walls) for the clean "outlined block" arcade pop.
     // RAISED platforms (min.y > 0) are skipped here and dressed with real CC0
     // platform models in dressPlatforms() (procedural block as the fallback).
     this.crateMat = solid(theme.obstacle, 0.15);
-    this.edgeMat = new THREE.LineBasicMaterial({ color: this.accent });
-    this.accentMats.push(this.edgeMat);
     for (const box of map.obstacles) {
       if (box.min.y > 0.01) continue; // raised catwalk → dressed separately
       this.addCrate(box);
