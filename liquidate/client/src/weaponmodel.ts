@@ -34,10 +34,17 @@ export interface WeaponGlbCfg {
   length: number;
   yaw: number;
 }
-export const WEAPON_GLB: Partial<Record<WeaponId, WeaponGlbCfg>> = {
-  assault: { asset: 'wpn-rifle', length: 0.7, yaw: 0 },
-  pistol: { asset: 'wpn-pistol', length: 0.42, yaw: 0 },
-};
+
+/**
+ * DISABLED for now (kept empty) so all 7 weapons share ONE consistent style: the
+ * procedural models. Only 2 real CC0 guns were reachable (Kenney blasters), and a
+ * 2-real / 5-procedural mix read as inconsistent in-game. The drop-in pipeline +
+ * the fetched models (`client/public/assets/weapons/`) are kept staged — to
+ * re-enable a real model, add its `wpn-*` entry back to manifest.ts and map it
+ * here, e.g. `assault: { asset: 'wpn-rifle', length: 0.7, yaw: 0 }`. Ideally fill
+ * ALL archetypes from one pack so the set stays consistent + distinct.
+ */
+export const WEAPON_GLB: Partial<Record<WeaponId, WeaponGlbCfg>> = {};
 
 /** Per-weapon first-person rest pose (the bob/sway/recoil ride on top). */
 export const VIEWMODEL_POSE: Record<

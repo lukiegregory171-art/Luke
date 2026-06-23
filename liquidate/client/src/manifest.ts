@@ -32,9 +32,8 @@ export const MANIFEST: AssetManifest = [
   // real art, scaled to the obstacle footprint (see world.ts).
   { id: 'env-platform', url: '/assets/env/platform.glb', category: 'prop', preload: true },
 
-  // Real CC0 weapon models (Kenney FPS kit, MIT) for 2 archetypes; the others
-  // stay procedural. Used by the first-person viewmodel + the inspect turntable,
-  // recoloured by the equipped skin (see weaponmodel.ts WEAPON_GLB).
-  { id: 'wpn-rifle', url: '/assets/weapons/rifle.glb', category: 'weapon', preload: true },
-  { id: 'wpn-pistol', url: '/assets/weapons/pistol.glb', category: 'weapon', preload: true },
+  // NOTE: real CC0 weapon models (Kenney FPS kit) are staged at
+  // /assets/weapons/{rifle,pistol}.glb but currently DISABLED for visual
+  // consistency (all 7 guns use the procedural model — see weaponmodel.ts
+  // WEAPON_GLB). Re-register them here + map them in WEAPON_GLB to re-enable.
 ];
