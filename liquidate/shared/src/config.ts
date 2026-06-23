@@ -43,6 +43,7 @@ export const WEAPON_SWITCH_TIME = 0.35; // brief delay after swapping weapons
 // --- Vertical movement (jump + gravity; shared by prediction + authority) ---
 export const GRAVITY = 24; // units/s^2 pulling players down
 export const JUMP_SPEED = 9; // upward launch velocity (~1.7u peak — clears a crate)
+export const JUMP_PAD_SPEED = 14; // launch off a jump pad (~4u peak — reaches the catwalks)
 export const AIR_CONTROL = 0.45; // fraction of ground accel usable while airborne
 
 // --- Jetpack ability (hold jump in the air to thrust; drains fuel) ----------

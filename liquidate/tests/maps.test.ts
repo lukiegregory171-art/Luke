@@ -55,4 +55,27 @@ describe('maps', () => {
     }
     expect(totalRaised).toBeGreaterThan(0); // the upper levels exist
   });
+
+  it('jump pads are in-bounds, positive-radius, and clear of ground cover', () => {
+    let totalPads = 0;
+    for (const map of MAP_LIST) {
+      const halfW = map.width / 2;
+      const halfD = map.depth / 2;
+      for (const p of map.jumpPads ?? []) {
+        totalPads++;
+        expect(p.r).toBeGreaterThan(0);
+        expect(Math.abs(p.x) + p.r).toBeLessThan(halfW);
+        expect(Math.abs(p.z) + p.r).toBeLessThan(halfD);
+        // A pad must sit on open floor — not inside a GROUND obstacle's footprint
+        // (it launches off the floor, so it can't be buried under low cover).
+        for (const b of map.obstacles) {
+          if (b.min.y > 0.01) continue; // raised catwalks float above — fine
+          const insideX = p.x > b.min.x && p.x < b.max.x;
+          const insideZ = p.z > b.min.z && p.z < b.max.z;
+          expect(insideX && insideZ).toBe(false);
+        }
+      }
+    }
+    expect(totalPads).toBeGreaterThan(0);
+  });
 });

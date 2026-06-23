@@ -22,6 +22,13 @@ export interface SpawnPoint {
   yaw: number; // facing direction (radians); 0 looks down -Z
 }
 
+/** A floor zone that launches a grounded player upward (server-authoritative). */
+export interface JumpPad {
+  x: number;
+  z: number;
+  r: number; // radius (a player whose centre is within r launches)
+}
+
 export interface GameMap {
   id: string;
   name: string;
@@ -31,6 +38,8 @@ export interface GameMap {
   obstacles: AABB[];
   /** At least 2: [0] and [1] are the 1v1 ends; extras are used for FFA. */
   spawns: SpawnPoint[];
+  /** Optional floor jump pads (vertical mobility to the upper levels). */
+  jumpPads?: JumpPad[];
 }
 
 function box(cx: number, cz: number, sizeX: number, sizeZ: number, height: number, y = 0): AABB {
@@ -134,6 +143,11 @@ export const REFINERY: GameMap = {
     facing(-13, 6),
     facing(13, 6),
   ],
+  // Floor jump pads near two catwalks — launch up onto the upper level.
+  jumpPads: [
+    { x: -6, z: -6, r: 1.3 },
+    { x: 6, z: 6, r: 1.3 },
+  ],
 };
 
 const VAULT_W = 32;
@@ -179,6 +193,11 @@ export const VAULT: GameMap = {
     facing(-11, 14),
     facing(11, 14),
   ],
+  // Floor jump pads near two catwalks — launch up onto the upper level.
+  jumpPads: [
+    { x: -4, z: -4, r: 1.3 },
+    { x: 4, z: 4, r: 1.3 },
+  ],
 };
 
 /**
@@ -221,6 +240,11 @@ export const DATACENTER: GameMap = {
     facing(13, -13),
     facing(-13, 13),
     facing(13, 13),
+  ],
+  // Floor jump pads either side of the dais — launch up toward the catwalk ring.
+  jumpPads: [
+    { x: -6, z: 0, r: 1.3 },
+    { x: 6, z: 0, r: 1.3 },
   ],
 };
 
@@ -271,6 +295,11 @@ export const TRADING_FLOOR: GameMap = {
     facing(14, -14),
     facing(-14, 14),
     facing(14, 14),
+  ],
+  // Floor jump pads near two catwalks — launch up onto the upper ring.
+  jumpPads: [
+    { x: -5, z: -5, r: 1.3 },
+    { x: 5, z: 5, r: 1.3 },
   ],
 };
 

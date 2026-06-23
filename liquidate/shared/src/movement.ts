@@ -20,6 +20,7 @@ import {
   GROUND_FRICTION,
   JETPACK_ACCEL,
   JETPACK_MAX_RISE,
+  JUMP_PAD_SPEED,
   JUMP_SPEED,
   MAX_DT,
   MOVE_SPEED,
@@ -175,10 +176,28 @@ export function stepMovement(
   if (newY <= support) {
     newY = support;
     vel.y = 0;
+    // Jump pad: landing on the FLOOR over a pad launches you up (server-auth,
+    // shared so prediction matches). Pads are floor-level, so only when support
+    // is the ground — never off a crate that happens to sit over a pad's xz.
+    if (support <= STEP_TOL && onJumpPad(resolved.x, resolved.z, map)) {
+      vel.y = JUMP_PAD_SPEED;
+    }
   }
   resolved.y = newY;
 
   return { pos: resolved, vel, dashCd, fuel };
+}
+
+/** Is the player's centre within a jump pad's footprint? */
+export function onJumpPad(x: number, z: number, map: GameMap): boolean {
+  const pads = map.jumpPads;
+  if (!pads) return false;
+  for (const p of pads) {
+    const dx = x - p.x;
+    const dz = z - p.z;
+    if (dx * dx + dz * dz <= p.r * p.r) return true;
+  }
+  return false;
 }
 
 /**

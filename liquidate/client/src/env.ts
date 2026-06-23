@@ -132,6 +132,26 @@ export function buildDressing(
     group.add(pad);
   }
 
+  // Jump pads: a distinct bright cyan disc + ring so the launch zone reads at a
+  // glance (flat floor decals — never cover). Fixed colour (not skin-tinted).
+  const JUMP = 0x36e6ff;
+  for (const p of map.jumpPads ?? []) {
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(p.r, 32),
+      new THREE.MeshBasicMaterial({ color: JUMP, transparent: true, opacity: 0.45 }),
+    );
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(p.x, 0.04, p.z);
+    group.add(disc);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(p.r * 0.8, p.r, 32),
+      new THREE.MeshBasicMaterial({ color: JUMP, transparent: true, opacity: 0.95 }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(p.x, 0.05, p.z);
+    group.add(ring);
+  }
+
   return { group, accentMats };
 }
 

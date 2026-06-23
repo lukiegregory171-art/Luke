@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MAP,
+  JUMP_PAD_SPEED,
   MAX_DT,
   PLAYER_RADIUS,
   add,
@@ -8,6 +9,7 @@ import {
   length,
   makeMoveState,
   normalize,
+  onJumpPad,
   resolveCollisions,
   stepMovement,
   v3,
@@ -186,5 +188,38 @@ describe('jetpack ability', () => {
     let s = { ...makeMoveState(v3(5, 0, 0)), fuel: 0.2 };
     for (let i = 0; i < 60; i++) s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, FLAT);
     expect(s.fuel).toBeGreaterThan(0.2);
+  });
+});
+
+describe('jump pads (shared movement)', () => {
+  const PAD: GameMap = { ...FLAT, jumpPads: [{ x: 0, z: 0, r: 1.5 }] };
+
+  it('detects a player standing within a pad footprint', () => {
+    expect(onJumpPad(0, 0, PAD)).toBe(true);
+    expect(onJumpPad(1.0, 0, PAD)).toBe(true);
+    expect(onJumpPad(3, 0, PAD)).toBe(false); // outside the pad
+    expect(onJumpPad(0, 0, FLAT)).toBe(false); // no pads on this map
+  });
+
+  it('launches a grounded player off a pad (far higher than a normal jump)', () => {
+    let s = makeMoveState(v3(0, 0, 0)); // standing on the pad
+    s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, PAD);
+    expect(s.vel.y).toBeCloseTo(JUMP_PAD_SPEED, 1); // launched, no input needed
+
+    let peak = 0;
+    for (let i = 0; i < 90; i++) {
+      s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, PAD);
+      peak = Math.max(peak, s.pos.y);
+    }
+    expect(peak).toBeGreaterThan(2.6); // clears the catwalk height
+  });
+
+  it('does not launch a player who is not over a pad', () => {
+    let s = makeMoveState(v3(5, 0, 0)); // off the pad
+    for (let i = 0; i < 5; i++) {
+      s = stepMovement(s, { moveFwd: 0, moveRight: 0, yaw: 0 }, STEP, PAD);
+    }
+    expect(s.pos.y).toBe(0); // stays grounded
+    expect(s.vel.y).toBeLessThanOrEqual(0);
   });
 });

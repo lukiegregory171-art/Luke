@@ -145,6 +145,12 @@ see is what you collide with" holds. Reachability + walk-under clearance are
 guarded by `tests/maps.test.ts`. The collision is still just the AABBs in
 `shared/`; the height-aware movement (stand-on / walk-under) was already there.
 
+**Jump pads** (data: `GameMap.jumpPads`, all maps but Crossfire): floor zones that
+launch a grounded player upward (`JUMP_PAD_SPEED`, in `shared/movement.ts` so
+client prediction matches the server) — vertical mobility up to the catwalks.
+Cosmetic decal is a bright cyan disc+ring (flat floor marking, non-colliding).
+Guarded by `tests/shared.test.ts` + `tests/maps.test.ts`.
+
 **Still to add:** richer modular building kits, real ramps (the AABB collision is
 box-only, so ramps are currently stepped platforms), and `.ktx2`-textured PBR
 floor/wall materials. Drop kits into `client/assets/raw/environment/` and optimise
