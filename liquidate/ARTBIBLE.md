@@ -122,6 +122,12 @@ its **own first-person hold pose**, reload dip, and shot sound:
 Keep them **chunky, clean, flat-shaded stylised** — NOT photoreal (realism would
 clash with the bright flat world).
 
+**Real models (drop-in):** archetypes in `WEAPON_GLB` use a real CC0 `.glb`
+(currently assault + pistol — Kenney FPS kit), recoloured by the equipped skin as
+a flat solid (we use the geometry, not the baked texture, so it matches the flat
+style and stays skinnable). The rest stay procedural. Drop more weapon `.glb`s
+into `client/assets/raw/weapons/`.
+
 ## Weapon skins (cosmetic, data-driven, rarity ladder)
 
 Roblox-Rivals-style skins: many per weapon, all **procedural** (material-driven,

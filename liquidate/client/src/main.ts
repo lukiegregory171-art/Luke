@@ -91,6 +91,7 @@ sfx.setMuted(settings.muted);
 const assets = new AssetManager(world.renderer);
 assets.register(MANIFEST);
 world.setAssets(assets);
+gun.setAssets(assets); // real GLB weapon models for the archetypes that have them
 
 const overlay = document.getElementById('overlay') as HTMLElement;
 const cardMenu = document.getElementById('card-menu') as HTMLElement;
@@ -354,6 +355,7 @@ let walletBalance = 0;
 let loggedIn = false;
 
 const inspect = new Inspect(document.getElementById('inspect-canvas') as HTMLCanvasElement);
+inspect.setAssets(assets);
 const lockerWeaponsEl = document.getElementById('locker-weapons') as HTMLElement;
 const invSkinsEl = document.getElementById('inv-skins') as HTMLElement;
 const invNameEl = document.getElementById('inv-name') as HTMLElement;

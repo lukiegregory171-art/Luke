@@ -45,6 +45,13 @@ at a time.
 - **Distinct models:** each weapon archetype has its own multi-part low-poly
   model + first-person pose in `client/src/weaponmodel.ts` (one builder, shared by
   the viewmodel, the inspect turntable, and the third-person held weapon).
+- **Real GLB models (drop-in):** `WEAPON_GLB` maps archetypes to real CC0 weapon
+  `.glb`s (currently assault + pistol — Kenney FPS kit); `buildWeaponModel` uses
+  the GLB when its asset is resident and recolours it with the skin's body
+  material (flat-shaded, on-style), else the procedural model. Geometry is shared
+  with the asset cache (`WeaponModel.shared`) — never disposed. Add more by
+  dropping a `.glb`, registering it in the manifest, and adding a `WEAPON_GLB`
+  entry — no engine change. The other 5 weapons stay procedural.
 - **Skins catalog:** `shared/src/weaponskins.ts` — many skins per weapon across a
   6-tier rarity ladder (Common→Exotic). Treatments are **procedural** (finish /
   emissive / anim / particle), so **adding a skin = one catalog entry**; the

@@ -8,9 +8,10 @@
 
 import * as THREE from 'three';
 import { COLORS } from './palette';
-import { buildWeaponModel, type WeaponModel } from './weaponmodel';
+import { buildWeaponModel, WEAPON_GLB, type WeaponModel } from './weaponmodel';
 import { skinMaterials, type SkinPaint } from './skinmat';
 import { defaultSkinFor, type WeaponSkin } from '@liquidate/shared';
+import type { AssetManager } from './assets';
 
 const INSPECT_SCALE = 2.4; // blow the viewmodel-sized model up to fill the frame
 
@@ -21,9 +22,15 @@ export class Inspect {
   private readonly rig = new THREE.Group(); // turntable — holds the model, spins
   private model?: WeaponModel;
   private paint: SkinPaint;
+  private assets?: AssetManager;
   private raf = 0;
   private running = false;
   private last = 0;
+
+  /** Provide the asset manager so real GLB weapon models show on the turntable. */
+  setAssets(assets: AssetManager): void {
+    this.assets = assets;
+  }
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -60,10 +67,14 @@ export class Inspect {
 
   private buildModel(skin: WeaponSkin): void {
     if (this.model) {
-      for (const m of [...this.model.body, ...this.model.accent]) m.geometry.dispose();
+      if (!this.model.shared) {
+        for (const m of [...this.model.body, ...this.model.accent]) m.geometry.dispose();
+      }
       this.rig.remove(this.model.group);
     }
-    this.model = buildWeaponModel(skin.weapon, this.paint.body, this.paint.accent);
+    const cfg = WEAPON_GLB[skin.weapon];
+    const glb = cfg ? (this.assets?.get(cfg.asset) ?? undefined) : undefined;
+    this.model = buildWeaponModel(skin.weapon, this.paint.body, this.paint.accent, glb);
     this.model.group.scale.setScalar(INSPECT_SCALE);
     this.rig.add(this.model.group);
     this.paint.decorate(this.model.group);

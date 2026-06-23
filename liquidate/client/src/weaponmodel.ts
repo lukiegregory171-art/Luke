@@ -19,7 +19,25 @@ export interface WeaponModel {
   body: THREE.Mesh[]; // main chassis — takes the skin's base colour
   accent: THREE.Mesh[]; // sights/rails/mag/scope — takes the secondary/emissive
   muzzle: { x: number; y: number; z: number }; // barrel tip (tracer origin), local
+  shared: boolean; // geometry is shared/cached (a GLB) — do NOT dispose on rebuild
 }
+
+/**
+ * Real CC0 weapon models per archetype (Kenney FPS kit). Where present, the
+ * first-person viewmodel + inspect use the GLB instead of the procedural model
+ * (recoloured by the equipped skin so it stays on-style and skinnable). The
+ * others stay procedural. `length` is the target viewmodel length (m); `yaw`
+ * orients the barrel down -Z (flip to Math.PI if a model points the wrong way).
+ */
+export interface WeaponGlbCfg {
+  asset: string;
+  length: number;
+  yaw: number;
+}
+export const WEAPON_GLB: Partial<Record<WeaponId, WeaponGlbCfg>> = {
+  assault: { asset: 'wpn-rifle', length: 0.7, yaw: 0 },
+  pistol: { asset: 'wpn-pistol', length: 0.42, yaw: 0 },
+};
 
 /** Per-weapon first-person rest pose (the bob/sway/recoil ride on top). */
 export const VIEWMODEL_POSE: Record<
@@ -77,12 +95,17 @@ export function buildWeaponModel(
   id: WeaponId,
   bodyMat: THREE.Material,
   accentMat: THREE.Material,
+  glb?: THREE.Object3D,
 ): WeaponModel {
+  const cfg = WEAPON_GLB[id];
+  if (glb && cfg) return buildFromGlb(glb, bodyMat, cfg);
+
   const out: WeaponModel = {
     group: new THREE.Group(),
     body: [],
     accent: [],
     muzzle: { x: 0, y: 0.01, z: -0.5 },
+    shared: false,
   };
   const b = (s: [number, number, number], p: [number, number, number]) =>
     box(out, 'body', bodyMat, s, p);
@@ -160,4 +183,46 @@ export function buildWeaponModel(
     }
   }
   return out;
+}
+
+/**
+ * Build a viewmodel from a real GLB weapon: orient the barrel down -Z, scale to a
+ * viewmodel length, centre it, and recolour every mesh with the skin's body
+ * material (so it's flat-shaded + skinnable, on-style). Geometry is shared with
+ * the asset cache, so `shared: true` tells callers NOT to dispose it.
+ */
+function buildFromGlb(glb: THREE.Object3D, bodyMat: THREE.Material, cfg: WeaponGlbCfg): WeaponModel {
+  const group = new THREE.Group();
+  glb.rotation.y = cfg.yaw;
+
+  // Scale so the longest axis (the barrel) matches the target length.
+  const size = new THREE.Vector3();
+  new THREE.Box3().setFromObject(glb).getSize(size);
+  const longest = Math.max(size.x, size.y, size.z) || 1;
+  glb.scale.setScalar(cfg.length / longest);
+
+  // Centre on the bounding box, then read the front tip for the muzzle.
+  const bb = new THREE.Box3().setFromObject(glb);
+  const center = new THREE.Vector3();
+  bb.getCenter(center);
+  glb.position.sub(center);
+
+  const body: THREE.Mesh[] = [];
+  glb.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh) {
+      m.material = bodyMat;
+      m.castShadow = true;
+      body.push(m);
+    }
+  });
+  group.add(glb);
+
+  return {
+    group,
+    body,
+    accent: [],
+    muzzle: { x: 0, y: 0, z: bb.min.z - center.z },
+    shared: true,
+  };
 }

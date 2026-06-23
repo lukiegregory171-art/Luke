@@ -16,9 +16,10 @@
 import * as THREE from 'three';
 import { clamp, MOVE_SPEED, type Vec3, type WeaponId } from '@liquidate/shared';
 import { Pool } from './pool';
-import { buildWeaponModel, VIEWMODEL_POSE, type WeaponModel } from './weaponmodel';
+import { buildWeaponModel, VIEWMODEL_POSE, WEAPON_GLB, type WeaponModel } from './weaponmodel';
 import { skinMaterials, type SkinPaint } from './skinmat';
 import { defaultSkinFor, weaponSkinById, type WeaponSkin } from '@liquidate/shared';
+import type { AssetManager } from './assets';
 
 /** Per-frame view motion that drives bob (speed) and sway (look delta). */
 export interface ViewMotion {
@@ -61,6 +62,7 @@ export class Weapon {
   private paint: SkinPaint;
   private skin: WeaponSkin;
   private loadout: Partial<Record<WeaponId, string>> = {};
+  private assets?: AssetManager;
 
   // Skin accent (P4): tracers retint to this; UI/arena use the same hue.
   private accentValue = 0x2bd96b;
@@ -149,16 +151,26 @@ export class Weapon {
     );
   }
 
+  /** Provide the asset manager so real GLB weapon models can be used. */
+  setAssets(assets: AssetManager): void {
+    this.assets = assets;
+  }
+
   /** (Re)build the model for `id` using the current skin paint + set its pose. */
   private buildModel(id: WeaponId): void {
     if (this.model) {
-      for (const m of this.model.body) m.geometry.dispose();
-      for (const m of this.model.accent) m.geometry.dispose();
+      // GLB geometry is shared with the asset cache — never dispose it.
+      if (!this.model.shared) {
+        for (const m of this.model.body) m.geometry.dispose();
+        for (const m of this.model.accent) m.geometry.dispose();
+      }
       this.group.remove(this.model.group);
     }
     this.weaponId = id;
     this.flashScale = FLASH_SCALE[id];
-    this.model = buildWeaponModel(id, this.paint.body, this.paint.accent);
+    const cfg = WEAPON_GLB[id];
+    const glb = cfg ? (this.assets?.get(cfg.asset) ?? undefined) : undefined;
+    this.model = buildWeaponModel(id, this.paint.body, this.paint.accent, glb);
     this.group.add(this.model.group);
     this.paint.decorate(this.model.group); // attach particle fx, if any
 
