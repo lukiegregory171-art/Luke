@@ -178,7 +178,12 @@ export class World {
       if (mesh.geometry) mesh.geometry.dispose();
     });
     this.arena.clear();
-    // Prop clones share cached geometry/materials — clear WITHOUT disposing.
+    // Prop clones share cached geometry/materials — clear WITHOUT disposing those,
+    // but free each InstancedMesh's per-instance buffer.
+    this.propsGroup.traverse((o) => {
+      const im = o as THREE.InstancedMesh;
+      if (im.isInstancedMesh) im.dispose();
+    });
     this.propsGroup.clear();
 
     const theme = envTheme(map);

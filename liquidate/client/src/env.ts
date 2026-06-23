@@ -135,16 +135,25 @@ export function buildDressing(
   return { group, accentMats };
 }
 
+interface Placement {
+  x: number;
+  y: number; // desired BOTTOM (feet) height of the prop
+  z: number;
+  rotY: number;
+}
+
 /**
  * Place real CC0 environment PROPS (Kenney) as a non-colliding decorative layer:
- * clouds high in the sky and grass + flags hugging the perimeter. `get(id)`
+ * clouds high in the sky and grass + flags hugging the perimeter. Each prop type
+ * is drawn as ONE InstancedMesh (one draw call for all its copies). `get(id)`
  * returns a fresh clone of a loaded prop (or null if not resident — then it's
- * simply skipped, so the procedural look still stands).
+ * skipped, so the procedural look still stands).
  *
  * Same rule as the dressing: nothing here is cover. Clouds sit above the wall
- * line; grass/flags hug the perimeter — never planted in the interior play space.
- * Clones SHARE cached geometry/materials, so the caller must clear them WITHOUT
- * disposing.
+ * line; grass/flags hug the perimeter — never the interior play space. The
+ * geometry/material are SHARED with the asset cache, so the caller must clear the
+ * group WITHOUT disposing them (but should dispose the InstancedMesh instance
+ * buffers — see world.ts).
  */
 export function buildProps(
   map: GameMap,
@@ -154,70 +163,94 @@ export function buildProps(
   const halfW = map.width / 2;
   const halfD = map.depth / 2;
   const wallH = map.wallHeight;
-  const tmp = new THREE.Box3();
-  const size = new THREE.Vector3();
-
-  // Clone `id`, scale so its footprint (or height) ≈ `target` m, sit it at (x,y,z).
-  const place = (
-    id: string,
-    target: number,
-    x: number,
-    y: number,
-    z: number,
-    by: 'width' | 'height',
-    rotY = 0,
-  ): void => {
-    const o = get(id);
-    if (!o) return;
-    tmp.setFromObject(o);
-    tmp.getSize(size);
-    const dim = by === 'height' ? size.y : Math.max(size.x, size.z);
-    const s = target / (dim || 1);
-    o.scale.setScalar(s);
-    o.position.set(x, y - tmp.min.y * s, z);
-    o.rotation.y = rotY;
-    o.traverse((m) => {
-      const mesh = m as THREE.Mesh;
-      if (mesh.isMesh) mesh.castShadow = false; // decor doesn't cast (perf + clarity)
-    });
-    group.add(o);
-  };
 
   // Clouds: a deterministic scatter ABOVE the wall line (never reachable/cover).
   const cy = wallH + 7;
-  const clouds: [number, number, number][] = [
-    [-halfW * 0.8, cy + 1, -halfD * 0.5],
-    [halfW * 0.7, cy + 3, halfD * 0.3],
-    [-halfW * 0.2, cy + 5, halfD * 0.85],
-    [halfW * 0.35, cy, -halfD * 0.9],
-    [0, cy + 4, halfD * 0.2],
-    [-halfW * 0.9, cy + 2, halfD * 0.95],
+  const clouds: Placement[] = [
+    { x: -halfW * 0.8, y: cy + 1, z: -halfD * 0.5, rotY: 0 },
+    { x: halfW * 0.7, y: cy + 3, z: halfD * 0.3, rotY: 0 },
+    { x: -halfW * 0.2, y: cy + 5, z: halfD * 0.85, rotY: 0 },
+    { x: halfW * 0.35, y: cy, z: -halfD * 0.9, rotY: 0 },
+    { x: 0, y: cy + 4, z: halfD * 0.2, rotY: 0 },
+    { x: -halfW * 0.9, y: cy + 2, z: halfD * 0.95, rotY: 0 },
   ];
-  for (const [x, y, z] of clouds) place('cloud', 7, x, y, z, 'width');
 
   // Grass tufts hugging the inner perimeter (short → never cover).
   const gx = halfW - 0.7;
   const gz = halfD - 0.7;
+  const grass: Placement[] = [];
   const n = 5;
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
-    place('grass', 0.7, -gx + 2 * gx * t, 0, -gz, 'height');
-    place('grass', 0.7, -gx + 2 * gx * t, 0, gz, 'height');
-    place('grass', 0.7, -gx, 0, -gz + 2 * gz * t, 'height');
-    place('grass', 0.7, gx, 0, -gz + 2 * gz * t, 'height');
+    grass.push({ x: -gx + 2 * gx * t, y: 0, z: -gz, rotY: 0 });
+    grass.push({ x: -gx + 2 * gx * t, y: 0, z: gz, rotY: 0 });
+    grass.push({ x: -gx, y: 0, z: -gz + 2 * gz * t, rotY: 0 });
+    grass.push({ x: gx, y: 0, z: -gz + 2 * gz * t, rotY: 0 });
   }
 
   // Corner flags: perimeter accent (in the cover band, but at the corner — not
   // interior, so it can't read as fake cover).
   const fx = halfW - 0.5;
   const fz = halfD - 0.5;
-  const flags: [number, number, number][] = [
-    [-fx, -fz, 0.4],
-    [fx, -fz, -0.4],
-    [-fx, fz, Math.PI - 0.4],
-    [fx, fz, Math.PI + 0.4],
+  const flags: Placement[] = [
+    { x: -fx, y: 0, z: -fz, rotY: 0.4 },
+    { x: fx, y: 0, z: -fz, rotY: -0.4 },
+    { x: -fx, y: 0, z: fz, rotY: Math.PI - 0.4 },
+    { x: fx, y: 0, z: fz, rotY: Math.PI + 0.4 },
   ];
-  for (const [x, z, r] of flags) place('flag', 2.0, x, 0, z, 'height', r);
 
+  instanceProp(group, get('cloud'), clouds, 7, 'width');
+  instanceProp(group, get('grass'), grass, 0.7, 'height');
+  instanceProp(group, get('flag'), flags, 2.0, 'height');
   return group;
+}
+
+/**
+ * Draw `placements` copies of a prop as a single InstancedMesh: normalise the
+ * source to `target` metres (by footprint or height) and bake each placement
+ * (position with feet at `y`, yaw) into an instance matrix. No-op if the prop
+ * isn't resident or there's nothing to place.
+ */
+function instanceProp(
+  group: THREE.Group,
+  src: THREE.Object3D | null,
+  placements: Placement[],
+  target: number,
+  by: 'width' | 'height',
+): void {
+  if (!src || placements.length === 0) return;
+  src.updateMatrixWorld(true);
+  let mesh: THREE.Mesh | undefined;
+  src.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && !mesh) mesh = m;
+  });
+  if (!mesh) return;
+
+  const box = new THREE.Box3().setFromObject(src);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const dim = by === 'height' ? size.y : Math.max(size.x, size.z);
+  const s = target / (dim || 1);
+  const meshLocal = mesh.matrixWorld.clone(); // src is at identity
+
+  const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length);
+  inst.castShadow = false;
+  inst.frustumCulled = false; // scattered + cheap; never wrongly culled
+
+  const base = new THREE.Matrix4();
+  const out = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const scale = new THREE.Vector3(s, s, s);
+  const up = new THREE.Vector3(0, 1, 0);
+  placements.forEach((p, i) => {
+    pos.set(p.x, p.y - box.min.y * s, p.z); // sit the feet at p.y
+    quat.setFromAxisAngle(up, p.rotY);
+    base.compose(pos, quat, scale);
+    out.multiplyMatrices(base, meshLocal);
+    inst.setMatrixAt(i, out);
+  });
+  inst.instanceMatrix.needsUpdate = true;
+  group.add(inst);
 }

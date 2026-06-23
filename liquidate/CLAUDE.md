@@ -87,10 +87,12 @@ at a time.
   and never touch hit detection (hitboxes are spheres from feet). Locked by
   `tests/avatar.test.ts` + `tests/character.test.ts`.
 - **Map props:** real CC0 env props (Kenney clouds/grass/flags) are a
-  **non-colliding** decorative layer placed by `env.ts buildProps` (clones live
-  in `world.propsGroup`, cleared without disposing since they share cached
-  geometry). Collision/occlusion stays the simple `shared/` obstacles — "what you
-  see is what you collide with"; `tests/env.test.ts` enforces no fake cover.
+  **non-colliding** decorative layer placed by `env.ts buildProps`. Each prop type
+  is **one InstancedMesh** (one draw call for all its copies — ~30 prop meshes →
+  3); they live in `world.propsGroup`, which is cleared without disposing the
+  shared cached geometry/material (only the per-instance buffers). Collision/
+  occlusion stays the simple `shared/` obstacles — "what you see is what you
+  collide with"; `tests/env.test.ts` enforces no fake cover (incl. instances).
 
 ## Hard rules (do not violate)
 

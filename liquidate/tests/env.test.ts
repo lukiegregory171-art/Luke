@@ -68,20 +68,26 @@ describe('real env props (CC0 Kenney) are decoration, never cover', () => {
   it('places clouds/grass/flags only above the wall or at the perimeter', () => {
     const map = VAULT;
     const group = buildProps(map, get);
-    expect(group.children.length).toBeGreaterThan(0);
+    expect(group.children.length).toBeGreaterThan(0); // instanced prop meshes
 
     const halfW = map.width / 2;
     const halfD = map.depth / 2;
     const margin = 1.0;
-    group.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const y = mesh.position.y;
-      if (y <= 0.2 || y >= map.wallHeight) return; // sky / floor decor can't be cover
-      const interior =
-        Math.abs(mesh.position.x) < halfW - margin && Math.abs(mesh.position.z) < halfD - margin;
-      expect(interior).toBe(false);
-    });
+    const m = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scl = new THREE.Vector3();
+    for (const obj of group.children) {
+      const inst = obj as THREE.InstancedMesh;
+      expect(inst.isInstancedMesh).toBe(true);
+      for (let i = 0; i < inst.count; i++) {
+        inst.getMatrixAt(i, m);
+        m.decompose(pos, quat, scl);
+        if (pos.y <= 0.2 || pos.y >= map.wallHeight) continue; // sky/floor can't be cover
+        const interior = Math.abs(pos.x) < halfW - margin && Math.abs(pos.z) < halfD - margin;
+        expect(interior).toBe(false);
+      }
+    }
   });
 
   it('skips gracefully when a prop is not resident', () => {
