@@ -50,9 +50,9 @@ const DEPTH = 44;
 const WALL_HEIGHT = 4;
 
 /**
- * "Crossfire" — a symmetric arena. A tall central pillar plus mirrored
- * cover crates near each spawn and along the flanks, giving plenty of cover
- * to test occluded shots later.
+ * "Crossfire" — a symmetric arena. A tall central pillar plus mirrored cover
+ * crates near each spawn and along the flanks, and a pair of raised catwalks
+ * beside the pillar (a second level you hop onto from the mid crates).
  */
 export const CROSSFIRE: GameMap = {
   id: 'crossfire',
@@ -63,9 +63,13 @@ export const CROSSFIRE: GameMap = {
   obstacles: [
     // Central pillar (blocks the direct spawn-to-spawn sightline).
     box(0, 0, 4, 4, 3.0),
-    // Mirrored mid crates flanking the pillar.
+    // Mirrored mid crates flanking the pillar (the on-ramp to the catwalks).
     box(-8, 0, 2.5, 2.5, 1.4),
     box(8, 0, 2.5, 2.5, 1.4),
+    // Raised CATWALKS beside the pillar (float at 2.2..2.6): hop on from the mid
+    // crates, walk under at ground level.
+    box(-5, 0, 3, 3, 0.4, 2.2),
+    box(5, 0, 3, 3, 0.4, 2.2),
     // Mirrored cover ahead of each spawn.
     box(-6, -12, 3, 1.5, 1.4),
     box(6, -12, 3, 1.5, 1.4),
@@ -93,7 +97,8 @@ const REFINERY_D = 38;
 /**
  * "Refinery" — a wider arena built around four pillars in a diamond and a long
  * central divider with gaps, so there's no clean cross-map sightline and lots of
- * mid-range angles. Symmetric across both axes.
+ * mid-range angles. Raised catwalks inboard of the corner crates add a second
+ * level. Symmetric across both axes.
  */
 export const REFINERY: GameMap = {
   id: 'refinery',
@@ -110,11 +115,16 @@ export const REFINERY: GameMap = {
     box(9, 0, 2, 2, 3.0),
     box(0, -14, 2, 2, 3.0),
     box(0, 14, 2, 2, 3.0),
-    // Mirrored corner crates.
+    // Mirrored corner crates (the on-ramp to the catwalks).
     box(-12, -12, 3, 3, 1.4),
     box(12, 12, 3, 3, 1.4),
     box(12, -12, 3, 3, 1.4),
     box(-12, 12, 3, 3, 1.4),
+    // Raised CATWALKS inboard of each corner crate (float at 2.2..2.6).
+    box(-9, -9, 3, 3, 0.4, 2.2),
+    box(9, 9, 3, 3, 0.4, 2.2),
+    box(9, -9, 3, 3, 0.4, 2.2),
+    box(-9, 9, 3, 3, 0.4, 2.2),
   ],
   spawns: [
     { pos: { x: -REFINERY_W / 2 + 3, y: 0, z: 0 }, yaw: -Math.PI / 2 }, // -X end, facing +X
@@ -131,8 +141,9 @@ const VAULT_D = 42;
 
 /**
  * "Vault" — a long hall with a central pillar, mirrored diagonal crates, flank
- * walls, and cover just ahead of each spawn. Symmetric across both axes so
- * neither end has an edge; spawns face down the long (Z) axis.
+ * walls, and cover just ahead of each spawn, with raised catwalks inboard of the
+ * diagonal crates for a second level. Symmetric across both axes so neither end
+ * has an edge; spawns face down the long (Z) axis.
  */
 export const VAULT: GameMap = {
   id: 'vault',
@@ -143,11 +154,16 @@ export const VAULT: GameMap = {
   obstacles: [
     // Central pillar (breaks the spawn-to-spawn line).
     box(0, 0, 4, 4, 2.8),
-    // Mirrored diagonal crates around the centre.
+    // Mirrored diagonal crates around the centre (the on-ramp to the catwalks).
     box(-9, -9, 3, 3, 1.4),
     box(9, 9, 3, 3, 1.4),
     box(9, -9, 3, 3, 1.4),
     box(-9, 9, 3, 3, 1.4),
+    // Raised CATWALKS inboard of the diagonal crates (float at 2.2..2.6).
+    box(-6, -6, 3, 3, 0.4, 2.2),
+    box(6, 6, 3, 3, 0.4, 2.2),
+    box(6, -6, 3, 3, 0.4, 2.2),
+    box(-6, 6, 3, 3, 0.4, 2.2),
     // Flank walls down each side.
     box(-12, 0, 1.5, 7, 2.2),
     box(12, 0, 1.5, 7, 2.2),
