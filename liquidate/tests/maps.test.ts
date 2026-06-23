@@ -32,25 +32,27 @@ describe('maps', () => {
     }
   });
 
-  it('raised catwalks (floating platforms) are reachable in two hops', () => {
+  it('raised catwalks (floating platforms) are reachable in two hops and walkable under', () => {
     const jumpReach = (JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY); // jump peak height
-    const map = MAP_LIST.find((m) => m.id === 'tradingfloor')!;
-    const raised = map.obstacles.filter((b) => b.min.y > 0.01);
-    expect(raised.length).toBeGreaterThan(0); // the upper level exists
-
-    // Surfaces you can reach from the ground in one jump (incl. the ground).
-    const groundReach = [
-      0,
-      ...map.obstacles
-        .filter((b) => b.min.y <= 0.01 && b.max.y <= jumpReach + 1e-6)
-        .map((b) => b.max.y),
-    ];
-    // Every raised platform must be within one jump of such a surface.
-    for (const b of raised) {
-      const reachable = groundReach.some((t) => t <= b.max.y && b.max.y - t <= jumpReach + 1e-6);
-      expect(reachable).toBe(true);
-      // ...and you can walk UNDER it (a ~1.8 tall player clears the underside).
-      expect(b.min.y).toBeGreaterThanOrEqual(1.8);
+    let totalRaised = 0;
+    for (const map of MAP_LIST) {
+      const raised = map.obstacles.filter((b) => b.min.y > 0.01);
+      totalRaised += raised.length;
+      // Surfaces reachable from the ground in one jump (incl. the ground itself).
+      const groundReach = [
+        0,
+        ...map.obstacles
+          .filter((b) => b.min.y <= 0.01 && b.max.y <= jumpReach + 1e-6)
+          .map((b) => b.max.y),
+      ];
+      for (const b of raised) {
+        // Within one jump of a ground-reachable surface (two hops from the floor).
+        const reachable = groundReach.some((t) => t <= b.max.y && b.max.y - t <= jumpReach + 1e-6);
+        expect(reachable).toBe(true);
+        // And a ~1.8 m player clears the underside (genuine second level).
+        expect(b.min.y).toBeGreaterThanOrEqual(1.8);
+      }
     }
+    expect(totalRaised).toBeGreaterThan(0); // the upper levels exist
   });
 });

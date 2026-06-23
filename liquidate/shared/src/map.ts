@@ -166,9 +166,11 @@ export const VAULT: GameMap = {
 };
 
 /**
- * "Datacenter" — vertical map: a raised central dais you hop onto, tall server-
- * rack pillars for cover, and mid-side steps. Crates are jumpable (≤1.4) so you
- * fight on two levels. Symmetric.
+ * "Datacenter" — TWO-LEVEL vertical map: a raised central dais (1.2) for high
+ * ground, tall server-rack pillars, mid-side steps (1.0), AND a ring of raised
+ * CATWALKS (float at 2.2..2.6) that you reach from the steps (a 1.6 hop, under
+ * the ~1.7 jump height) or with the jetpack, then cross around the racks. You
+ * walk under the catwalks at ground level — real verticality. Symmetric.
  */
 export const DATACENTER: GameMap = {
   id: 'datacenter',
@@ -183,9 +185,15 @@ export const DATACENTER: GameMap = {
     box(8, 8, 1.6, 1.6, 2.6),
     box(8, -8, 1.6, 1.6, 2.6),
     box(-8, 8, 1.6, 1.6, 2.6),
-    // Mid-side step platforms (jumpable).
+    // Mid-side step platforms (jumpable — the on-ramp to the upper ring).
     box(-13, 0, 2, 3, 1.0),
     box(13, 0, 2, 3, 1.0),
+    // Raised CATWALKS (float at y 2.2..2.6): the upper ring. Hop on from the
+    // steps; walk under them on the ground. 0.4 thick.
+    box(-10, 0, 3, 3, 0.4, 2.2),
+    box(10, 0, 3, 3, 0.4, 2.2),
+    box(0, -10, 3, 3, 0.4, 2.2),
+    box(0, 10, 3, 3, 0.4, 2.2),
     // Cover ahead of the Z-end spawns.
     box(0, -14, 4, 1.5, 1.2),
     box(0, 14, 4, 1.5, 1.2),
