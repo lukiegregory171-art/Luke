@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIQUIDATE</title>
+    <!-- Bold rounded arcade font (falls back to system rounded sans if offline) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <!-- Boot loading screen (P1): asset preload + shader warmup. Removed once
+         the renderer is primed so the first played frame never stutters. -->
+    <div id="loading">
+      <div class="loading-box">
+        <h1>LIQUIDATE</h1>
+        <p class="sub">SERVER-AUTHORITATIVE 1V1 · PLAY-MONEY DEMO</p>
+        <div class="loading-bar"><div id="loading-fill"></div></div>
+        <div id="loading-label" class="loading-label">Booting…</div>
+      </div>
+    </div>
+
+    <!-- Damage flash (full-screen red vignette) -->
+    <div id="damage"></div>
+
+    <!-- Persistent low-health vignette (pulses while critical) -->
+    <div id="lowhp"></div>
+
+    <!-- HUD overlay (shown while playing) -->
+    <div id="hud" class="hidden">
+      <div id="crosshair">
+        <span class="ch ch-t"></span><span class="ch ch-b"></span> <span class="ch ch-l"></span
+        ><span class="ch ch-r"></span>
+      </div>
+      <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
+      <div id="dmgnums"></div>
+      <div id="banner"></div>
+      <div id="announce"></div>
+      <div id="dmgdir"><div id="dmgdir-arrow"></div></div>
+      <div id="killfeed"></div>
+      <div id="scoreboard" class="hidden"></div>
+
+      <div class="hud-top">
+        <span id="score">0&nbsp;&nbsp;YOU&nbsp;·&nbsp;OPP&nbsp;&nbsp;0</span>
+      </div>
+      <div class="hud-topright">PING <span id="latency">0 ms</span></div>
+
+      <div class="hud-bottom-left">
+        <div class="bars">
+          <div class="health-bar"><div id="health-fill"></div></div>
+          <div class="fuel-bar"><div id="fuel-fill"></div></div>
+        </div>
+        <div id="health-num">100</div>
+      </div>
+
+      <div class="hud-bottom-right">
+        <div id="weprack"></div>
+        <div id="weapon">RIFLE <span class="wkey">[1]</span></div>
+        <div id="ammo">
+          <span id="ammo-cur">30</span><span class="slash">/</span><span id="ammo-max">30</span>
+        </div>
+        <div id="reload" class="hidden">RELOADING…</div>
+      </div>
+    </div>
+
+    <!-- Screens overlay -->
+    <div id="overlay">
+      <!-- Lobby -->
+      <div class="overlay-card lobby" id="card-menu">
+        <h1>LIQUIDATE</h1>
+        <p class="sub">SERVER-AUTHORITATIVE 1V1 · PLAY-MONEY DEMO</p>
+
+        <!-- Sign in -->
+        <div id="lobby-signin" class="lobby-row">
+          <input id="lobby-handle" maxlength="24" placeholder="choose a handle" />
+          <button id="lobby-login">SIGN IN</button>
+        </div>
+
+        <!-- Account (after sign in) -->
+        <div id="lobby-account" class="hidden">
+          <div class="lobby-acct">
+            <span id="lobby-who">—</span>
+            <span id="lobby-balance" class="balance">—</span>
+          </div>
+          <div id="lobby-stats" class="lobby-stats">—</div>
+
+          <div class="lobby-label">STAKE</div>
+          <div id="lobby-stakes" class="lobby-stakes"></div>
+          <div id="lobby-preview" class="lobby-preview"></div>
+
+          <div class="lobby-bank">
+            <button id="lobby-deposit" class="ghost">DEPOSIT</button>
+            <button id="lobby-withdraw" class="ghost">WITHDRAW</button>
+          </div>
+        </div>
+
+        <div class="lobby-label">SKIN</div>
+        <div id="skins" class="skins"></div>
+        <button id="lobby-arsenal" class="ghost arsenal-btn">⬡ ARSENAL — INSPECT SKINS</button>
+        <div id="wallet" class="wallet hidden">
+          <button id="wallet-connect" class="ghost">CONNECT DEVNET WALLET</button>
+          <div class="lobby-row">
+            <input id="wallet-addr" placeholder="…or paste a devnet address" />
+            <button id="wallet-check" class="ghost">CHECK</button>
+          </div>
+          <div id="wallet-status" class="wallet-status">
+            Devnet token unlocks skins only — no real value, no wagering.
+          </div>
+        </div>
+
+        <div id="lobby-treasury" class="lobby-treasury">House treasury: —</div>
+
+        <div class="lobby-graphics">
+          <label for="quality">GRAPHICS</label>
+          <select id="quality">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="ultra">Ultra</option>
+          </select>
+          <span class="hint">· backtick toggles perf HUD</span>
+        </div>
+
+        <div class="lobby-options">
+          <label class="opt"
+            >VOLUME <input id="opt-volume" type="range" min="0" max="100" value="70"
+          /></label>
+          <label class="opt opt-check"><input id="opt-mute" type="checkbox" /> MUTE</label>
+          <label class="opt"
+            >SENSITIVITY <input id="opt-sens" type="range" min="0" max="100" value="50"
+          /></label>
+          <label class="opt"
+            >FOV <input id="opt-fov" type="range" min="70" max="110" value="80"
+          /></label>
+        </div>
+
+        <div class="btn-row">
+          <button id="lobby-find" disabled>FIND MATCH</button>
+          <button id="lobby-ffa" class="ghost" disabled>FREE-FOR-ALL</button>
+          <button id="lobby-tdm" class="ghost" disabled>TEAM DEATHMATCH</button>
+          <button id="lobby-practice" class="ghost">PRACTICE RANGE</button>
+        </div>
+        <p class="footnote controls">
+          WASD move · SPACE jump (hold = jetpack) · SHIFT dash · MOUSE aim/fire · 1–7 weapons · R
+          reload · TAB scoreboard
+        </p>
+        <p class="footnote">
+          DEMO play-money only — no real funds, deposits, or withdrawals of value.
+        </p>
+      </div>
+
+      <!-- Searching for opponent -->
+      <div class="overlay-card hidden" id="card-search">
+        <h1 class="small">FINDING OPPONENT</h1>
+        <div class="spinner"></div>
+        <p class="sub">Open a second tab and click FIND MATCH to duel yourself.</p>
+        <button id="cancel" class="ghost">CANCEL</button>
+      </div>
+
+      <!-- Match over -->
+      <div class="overlay-card hidden" id="card-over">
+        <h1 class="small" id="over-title">MATCH OVER</h1>
+        <p class="sub" id="over-detail"></p>
+        <div id="over-board" class="over-board"></div>
+        <button id="play-again">BACK TO LOBBY</button>
+      </div>
+
+      <!-- Arsenal locker: weapons grid + rarity skin tiles + 3D inspect -->
+      <div class="overlay-card hidden inventory" id="card-inventory">
+        <div class="locker-head">
+          <h1 class="small">ARSENAL</h1>
+          <span id="locker-balance" class="balance">—</span>
+        </div>
+        <div class="inv-body">
+          <div class="inv-viewport">
+            <canvas id="inspect-canvas"></canvas>
+            <div id="inv-name" class="inv-name">—</div>
+            <div id="inv-req" class="inv-req"></div>
+          </div>
+          <div class="inv-side">
+            <div class="lobby-label">WEAPON</div>
+            <div id="locker-weapons" class="locker-weapons"></div>
+            <div class="lobby-label">SKINS</div>
+            <div id="inv-skins" class="inv-skins"></div>
+            <div class="btn-row">
+              <button id="inv-buy" class="hidden">BUY</button>
+              <button id="inv-equip">EQUIP</button>
+              <button id="inv-close" class="ghost">CLOSE</button>
+            </div>
+            <p class="footnote">
+              Skins are cosmetic-only — server-authoritative ownership, bought with DEMO play-money.
+              They never change stats, hits, or how an opponent looks to you. No pay-to-win.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Click-to-resume hint (shown if the mouse is released mid-match) -->
+    <div id="resume-hint" class="hidden">Click to resume aiming</div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

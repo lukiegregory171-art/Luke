@@ -1,0 +1,22 @@
+# Render.com Blueprint for LIQUIDATE.
+# One Node web service built from liquidate/Dockerfile that serves the client
+# and the WebSocket game on a single port. Deploy via the button in
+# liquidate/README.md, or: Render dashboard -> New -> Blueprint -> this repo.
+#
+# Play-money DEMO only — deploying this does not make it a real-money product.
+services:
+  - type: web
+    name: liquidate
+    runtime: docker
+    rootDir: liquidate
+    dockerfilePath: Dockerfile
+    branch: claude/zealous-cannon-4jsywq
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      # Render injects PORT automatically; the server reads it. On the free tier
+      # the filesystem is ephemeral, so the demo DB resets on restart — fine for
+      # a demo. For persistent accounts, use a paid instance + a disk mounted at
+      # /data and set LIQUIDATE_DB=/data/liquidate.sqlite.
+      - key: LIQUIDATE_DB
+        value: /tmp/liquidate.sqlite

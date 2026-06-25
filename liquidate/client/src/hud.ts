@@ -1,0 +1,216 @@
+/**
+ * Thin wrapper over the HUD DOM: ammo, reload, score(s), health, latency, the
+ * hitmarker, a damage flash, and a transient banner.
+ */
+
+import { MAX_HEALTH, WEAPONS, WEAPON_IDS, weaponSlot, type WeaponId } from '@liquidate/shared';
+
+export interface ScoreRow {
+  name: string;
+  frags: number;
+  self: boolean;
+  alive: boolean;
+  ally?: boolean; // TDM: on your team (green) vs enemy (red); undefined = no teams
+}
+
+/** Escape user-supplied handles before inserting into innerHTML (XSS-safe). */
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!;
+  });
+}
+
+/** Build a scoreboard table (shared by the in-match Tab view + the over card). */
+export function scoreboardHTML(rows: ScoreRow[], title: string): string {
+  const body = rows
+    .map((r, i) => {
+      const team = r.ally === true ? ' ally' : r.ally === false ? ' enemy' : '';
+      return (
+        `<tr class="${r.self ? 'me' : ''}${team}${r.alive ? '' : ' dead'}">` +
+        `<td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.frags}</td></tr>`
+      );
+    })
+    .join('');
+  return (
+    `<div class="sb-title">${esc(title)}</div>` +
+    `<table><thead><tr><th>#</th><th>PLAYER</th><th>FRAGS</th></tr></thead>` +
+    `<tbody>${body}</tbody></table>`
+  );
+}
+
+export class Hud {
+  private readonly root = document.getElementById('hud') as HTMLElement;
+  private readonly ammo = document.getElementById('ammo') as HTMLElement;
+  private readonly ammoCur = document.getElementById('ammo-cur') as HTMLElement;
+  private readonly ammoMax = document.getElementById('ammo-max') as HTMLElement;
+  private readonly reload = document.getElementById('reload') as HTMLElement;
+  private readonly score = document.getElementById('score') as HTMLElement;
+  private readonly hitmarker = document.getElementById('hitmarker') as HTMLElement;
+  private readonly healthFill = document.getElementById('health-fill') as HTMLElement;
+  private readonly healthNum = document.getElementById('health-num') as HTMLElement;
+  private readonly fuelFill = document.getElementById('fuel-fill') as HTMLElement;
+  private readonly latency = document.getElementById('latency') as HTMLElement;
+  private readonly damage = document.getElementById('damage') as HTMLElement;
+  private readonly bannerEl = document.getElementById('banner') as HTMLElement;
+  private readonly announceEl = document.getElementById('announce') as HTMLElement;
+  private readonly weaponEl = document.getElementById('weapon') as HTMLElement;
+  private readonly killfeed = document.getElementById('killfeed') as HTMLElement;
+  private readonly dmgArrow = document.getElementById('dmgdir-arrow') as HTMLElement;
+  private readonly crosshair = document.getElementById('crosshair') as HTMLElement;
+  private readonly lowhp = document.getElementById('lowhp') as HTMLElement;
+  private readonly dmgnums = document.getElementById('dmgnums') as HTMLElement;
+  private readonly scoreboard = document.getElementById('scoreboard') as HTMLElement;
+  private readonly weprack = document.getElementById('weprack') as HTMLElement;
+
+  private hitTimer?: ReturnType<typeof setTimeout>;
+  private bannerTimer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    // Build the weapon rack once from the data-driven roster (keys 1..N).
+    this.weprack.innerHTML = WEAPON_IDS.map(
+      (id) => `<div class="wr" data-id="${id}"><b>${weaponSlot(id)}</b> ${WEAPONS[id].name}</div>`,
+    ).join('');
+  }
+
+  show(visible: boolean): void {
+    this.root.classList.toggle('hidden', !visible);
+    if (!visible) this.lowhp.classList.remove('show'); // clear the critical vignette
+  }
+
+  setAmmo(cur: number, max: number): void {
+    this.ammoCur.textContent = String(cur);
+    this.ammoMax.textContent = String(max);
+    this.ammo.classList.toggle('low', cur <= max * 0.25);
+  }
+
+  setReloading(reloading: boolean): void {
+    this.reload.classList.toggle('hidden', !reloading);
+  }
+
+  /** Practice mode: a single counter. */
+  setScore(n: number): void {
+    this.score.innerHTML = `DUMMIES&nbsp;DROPPED&nbsp;·&nbsp;${n}`;
+  }
+
+  /** Match mode: you vs opponent, first to the target wins. */
+  setScores(self: number, opp: number): void {
+    this.score.innerHTML = `<b>${self}</b>&nbsp;&nbsp;YOU&nbsp;·&nbsp;OPP&nbsp;&nbsp;<b>${opp}</b>`;
+  }
+
+  /** FFA: your frags vs the current leader. */
+  setFrags(self: number, leader: number): void {
+    this.score.innerHTML = `FRAGS&nbsp;<b>${self}</b>&nbsp;·&nbsp;LEAD&nbsp;<b>${leader}</b>`;
+  }
+
+  /** TDM: your team's frags vs the enemy team's. */
+  setTeamScores(mine: number, theirs: number): void {
+    this.score.innerHTML =
+      `<b class="t-ally">${mine}</b>&nbsp;TEAM&nbsp;·&nbsp;ENEMY&nbsp;<b class="t-enemy">${theirs}</b>`;
+  }
+
+  /** Live scoreboard (held Tab). */
+  showScoreboard(rows: ScoreRow[] | null): void {
+    if (!rows) {
+      this.scoreboard.classList.add('hidden');
+      return;
+    }
+    this.scoreboard.innerHTML = scoreboardHTML(rows, 'SCOREBOARD');
+    this.scoreboard.classList.remove('hidden');
+  }
+
+  setHealth(hp: number): void {
+    const frac = Math.max(0, Math.min(1, hp / MAX_HEALTH));
+    this.healthFill.style.width = `${frac * 100}%`;
+    this.healthNum.textContent = String(Math.max(0, Math.round(hp)));
+    const low = frac <= 0.3;
+    this.healthFill.classList.toggle('low', low);
+    // Pulsing red edge vignette while critical (cleared when dead/healed).
+    this.lowhp.classList.toggle('show', low && hp > 0);
+  }
+
+  /** Floating damage number near the crosshair (gold body / red headshot). */
+  damageNumber(amount: number, headshot: boolean): void {
+    const el = document.createElement('div');
+    el.className = 'dmgnum' + (headshot ? ' head' : '');
+    el.textContent = String(Math.round(amount));
+    const dx = (Math.random() * 2 - 1) * 38;
+    el.style.left = `calc(50% + ${dx}px)`;
+    el.style.top = `calc(50% - 26px)`;
+    this.dmgnums.appendChild(el);
+    setTimeout(() => el.remove(), 720);
+  }
+
+  /** Big centered callout (multi-kills / streaks). */
+  announce(text: string): void {
+    this.announceEl.textContent = text;
+    this.announceEl.classList.remove('show');
+    void this.announceEl.offsetWidth; // restart the animation
+    this.announceEl.classList.add('show');
+  }
+
+  /** Jetpack fuel meter (0..1). */
+  setFuel(frac: number): void {
+    const f = Math.max(0, Math.min(1, frac));
+    this.fuelFill.style.width = `${f * 100}%`;
+    this.fuelFill.classList.toggle('low', f < 0.25);
+  }
+
+  /** Brief crosshair expansion on firing (recoil read). */
+  crosshairKick(): void {
+    this.crosshair.classList.remove('kick');
+    void this.crosshair.offsetWidth; // restart the animation
+    this.crosshair.classList.add('kick');
+  }
+
+  setLatency(ms: number): void {
+    this.latency.textContent = `${Math.round(ms)} ms`;
+  }
+
+  hit(headshot: boolean): void {
+    this.hitmarker.classList.toggle('head', headshot);
+    this.hitmarker.classList.remove('show');
+    void this.hitmarker.offsetWidth; // restart the animation
+    this.hitmarker.classList.add('show');
+    if (this.hitTimer) clearTimeout(this.hitTimer);
+    this.hitTimer = setTimeout(() => this.hitmarker.classList.remove('show'), 120);
+  }
+
+  damageFlash(): void {
+    this.damage.classList.remove('show');
+    void this.damage.offsetWidth;
+    this.damage.classList.add('show');
+  }
+
+  banner(text: string, kind: 'good' | 'bad'): void {
+    this.bannerEl.textContent = text;
+    this.bannerEl.className = `show ${kind}`;
+    if (this.bannerTimer) clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => (this.bannerEl.className = ''), 1400);
+  }
+
+  setWeapon(id: WeaponId): void {
+    const w = WEAPONS[id];
+    this.weaponEl.innerHTML = `${w.name.toUpperCase()} <span class="wkey">[${weaponSlot(id)}]</span>`;
+    for (const row of Array.from(this.weprack.children) as HTMLElement[]) {
+      row.classList.toggle('on', row.dataset.id === id);
+    }
+  }
+
+  addKill(killer: string, victim: string, headshot: boolean, weapon?: string): void {
+    const el = document.createElement('div');
+    el.className = `kf${headshot ? ' head' : ''}`;
+    const wpn = weapon ? `<span class="kf-wpn">${weapon}</span>` : '▸';
+    el.innerHTML = `<b>${killer}</b> ${wpn} <span class="vic">${victim}</span>`;
+    this.killfeed.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+    while (this.killfeed.childElementCount > 4) this.killfeed.firstElementChild?.remove();
+  }
+
+  /** Show a damage indicator pointing toward the attacker (radians, 0 = ahead). */
+  damageFrom(angle: number): void {
+    this.dmgArrow.style.transform = `rotate(${angle}rad)`;
+    this.dmgArrow.classList.remove('show');
+    void this.dmgArrow.offsetWidth;
+    this.dmgArrow.classList.add('show');
+  }
+}

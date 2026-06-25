@@ -1,0 +1,319 @@
+# LIQUIDATE
+
+A server-authoritative **1v1 browser FPS** with a crypto-arena theme and a
+**play-money** economy layer (stake → winner sweeps the pot → house takes a
+rake). Two real players duel; the server is the single source of truth for
+position, hits, kills, ammo, score, and currency.
+
+> **No real money.** Everything in the economy is simulated play-money integers,
+> clearly labelled **DEMO**. There is no custody of funds, no fiat, no real-SOL
+> escrow, and no mainnet wagering anywhere in this codebase. See `CLAUDE.md`.
+
+**Project docs:** the full product brief is in `MASTER_BUILD.md`, the working
+conventions/roadmap in `CLAUDE.md`, and the **locked visual direction** (palette,
+materials, lighting, the UnrealBloom signature) in `ARTBIBLE.md`. The bar is a
+**Krunker-tier stylized** look on Three.js — a lean online vertical slice first
+(M0 scaffold → M1 authoritative core → M2 stylized pass → M3 content → M4 ship),
+then data-driven expansion.
+
+## Stack
+
+- **Server:** Node.js (LTS) + TypeScript, `ws` for WebSockets, plain HTTP for
+  static assets. No heavyweight framework.
+- **Client:** TypeScript + Three.js, bundled by Vite.
+- **Shared:** a `shared/` package (config, map, vector math, movement+collision,
+  wire protocol) imported by **both** sides so prediction and authority run
+  identical code.
+- **Tests:** Vitest (unit) + a headless integration match test (from M2).
+
+## Run it in the browser — GitHub Codespaces (no local install)
+
+The repo ships a dev container (`.devcontainer/`), so you can run everything in
+the browser:
+
+1. On the GitHub repo, click **Code → Codespaces → Create codespace** on the
+   `claude/zealous-cannon-4jsywq` branch. It builds a Node 20 container and
+   installs dependencies automatically (takes a minute the first time).
+2. In the Codespace terminal:
+   ```bash
+   cd liquidate
+   npm run dev
+   ```
+3. Codespaces forwards **port 5173** and pops up the URL — click **Open in
+   Browser** (use a real browser tab, not the in-editor preview, so pointer lock
+   works). If it doesn't open automatically, use the **Ports** tab and open the
+   `5173` URL.
+4. **Sign in** with a handle, pick a **demo stake**, and click **FIND MATCH**
+   (online 1v1 — open a second tab, sign in, and click FIND MATCH to duel
+   yourself) or **PRACTICE RANGE** (offline vs a bot). **WASD** move, **mouse**
+   aim, **click/hold** fire, **Space** dash, **R** reload, **1**/**2** switch
+   weapon, **Esc** release the mouse. All currency is play-money DEMO.
+
+Only port 5173 is exposed: the Vite client proxies the game's WebSocket (`/ws`)
+to the internal Node server, so a single forwarded port is all you need. The
+forwarded URL is private to your GitHub account by default — to let a second
+player join later (M2), set the port's visibility to **Public** in the Ports tab.
+
+## Run it locally
+
+Requires Node 20+. From the `liquidate/` directory:
+
+```bash
+npm install
+npm run dev      # starts the server (:8080) and the Vite client (:5173)
+```
+
+Open <http://localhost:5173> and **sign in with a handle** (you're granted a
+starting DEMO balance). Controls: **WASD** move, **mouse** aim, **click/hold**
+fire, **Space** dash, **R** reload, **1**/**2** switch weapon (Rifle /
+Scattergun), **Esc** release the mouse.
+
+- **FIND MATCH** — pick a **demo stake**, then queue for an online 1v1. **Open a
+  second tab** (or share the URL), sign in, and click FIND MATCH there too; the
+  two clients duel, first to 3 kills. The pot is 2× the stake, the house takes a
+  1% rake, and the winner is credited net — all server-authoritative DEMO money.
+- **PRACTICE RANGE** — an offline 1v1 against a bot (no stake).
+
+All currency is **play-money DEMO** — there is no real money anywhere.
+
+Other commands:
+
+```bash
+npm test         # run unit tests
+npm run typecheck
+npm run lint
+npm run format
+npm run build    # bundle server -> server/dist, build client -> client/dist
+```
+
+## Architecture (target)
+
+- **Fixed server tick:** 30 Hz simulation + snapshot broadcast.
+- **Client → server:** input messages only (`seq`, clamped `dt`, move axes,
+  yaw/pitch) plus discrete `fire`/`reload`. The client is never trusted for
+  outcomes.
+- **Server → client:** `init`, `waiting`, `start`, `snap` (authoritative state +
+  per-player `lastProcessedSeq`), events (`fire`/`hit`/`kill`/`respawn`/`over`/
+  `oppLeft`), and `pong`.
+- **Prediction + reconciliation** for the local player; **entity interpolation**
+  (~100 ms) for the opponent.
+- **Hit detection** is a server-side ray (eye → aim) vs the opponent's body/head
+  spheres, occluded by map geometry so cover works.
+
+## Status — what's done / not done
+
+### Done (M0 — Foundation)
+
+- Monorepo (npm workspaces): `shared`, `server`, `client`, `tests`.
+- Strict TypeScript, ESLint (flat config) + Prettier.
+- `shared/` exports config, map data, vector math, and movement+collision.
+- Node WebSocket server with the `init` handshake; client connects and logs it.
+- Single-origin networking: the client talks to `/ws` on its own host (Vite
+  proxies it in dev, the Node server serves it in prod), so localhost,
+  Codespaces, and the production build all work with the same client code.
+- GitHub Codespaces dev container (`.devcontainer/`) — run it entirely in the
+  browser with one forwarded port.
+- `npm run dev` runs both; `npm test` passes (vec math, dt clamp, movement +
+  collision).
+
+### Done (M1 — Core FPS, local feel)
+
+- Three.js arena built from the shared `GameMap` (floor, neon grid, perimeter
+  walls, edge-lit cover boxes) — what you see is what you collide with.
+- Pointer-lock mouse-look (yaw/pitch) wired so the camera's forward exactly
+  matches the shared `aimDirection`.
+- WASD movement through the shared `stepMovement` (the same collision code the
+  server will run), with a click-to-play / Esc-to-pause menu.
+- Hitscan rifle: crosshair, muzzle flash, fading tracer beam, recoil; ammo +
+  auto/manual reload; hitmarkers (white body / red headshot).
+- A target dummy whose body/head meshes match the shared hurtbox spheres; it
+  drops on kill, tracks a score, and respawns away from the player.
+- Ray math (`raySphere`, `rayAABB`, occluded `hitscan`) lives in `shared/` and
+  is unit-tested, so the server reuses it unchanged in M2.
+- Runtime-verified headless (WebGL renders, no console errors) and the solo
+  game logic (firing, occlusion, ammo/reload) is unit-tested.
+
+### Done (M2 — Authoritative multiplayer)
+
+- Matchmaking queue pairs two players into a 1v1 **Room** that runs the 30 Hz
+  authoritative sim; the menu now offers **FIND MATCH** (online) and
+  **PRACTICE RANGE** (the M1 solo mode).
+- **Server authority**: inputs are integrated with the shared movement code,
+  fires resolved with the shared occluded hitscan, and fire-rate / ammo /
+  reload / health / score / outcome all decided server-side. Clients only send
+  inputs.
+- **Client-side prediction + reconciliation** for the local player (snap to the
+  server position, replay unacked inputs) and **entity interpolation** (~100 ms)
+  for the opponent.
+- Server `fire`/`hit`/`kill`/`respawn`/`over`/`oppLeft` events drive tracers,
+  hitmarkers, a damage flash, a kill banner, scores, respawns, and the
+  match-over screen. First to 3 kills wins; disconnect forfeits to the opponent.
+  Live **ping** readout from ping/pong.
+- **Headless integration test** boots the real server and drives two scripted
+  WebSocket clients through a full match (matchmaking → movement+acks → a shot
+  blocked by cover → headshots → kill → respawn → second kill → winner) and a
+  forfeit case. Verified two real browser tabs matchmake and exchange snapshots.
+
+### Done (M3 — Gameplay depth)
+
+- **Practice bot**: PRACTICE RANGE is now an offline 1v1 vs an AI that strafes,
+  holds mid-range, respects line of sight, and aims imperfectly (fair/beatable).
+  It moves with the shared movement code and is shot with the shared hitscan.
+- **Two maps**: Crossfire and Refinery; a match picks one at random and the
+  client rebuilds the arena from the chosen map (sent in `start`).
+- **Second weapon**: a Scattergun (multi-pellet spread, server-side RNG) beside
+  the Rifle. Switch with **1**/**2**; the server tracks the weapon and ammo.
+- **Movement polish**: velocity-based acceleration/friction and a **dash**
+  (Space, with cooldown) — all in `shared`, with velocity + dash cooldown in
+  snapshots so client prediction/reconciliation stays exact.
+- **Feedback**: hitmarkers (white/red), a directional **damage indicator**, a
+  **kill feed**, a damage flash, and a kill banner.
+- **Audio**: synthesized SFX (shoot/hit/reload/dash/kill/death) via Web Audio —
+  no asset files.
+
+### Done (M4 — Demo economy, play-money only)
+
+> **No real money.** Every amount here is an integer **DEMO** credit held
+> server-side in SQLite. There is no custody, fiat, token, or real
+> deposit/withdraw of value — this only *simulates* a stake/pot/rake economy.
+
+- **Accounts + stats** in SQLite (`better-sqlite3`): sign in by handle, granted
+  a starting DEMO balance; persistent wins/losses/kills/deaths.
+- **Lobby flow**: pick a stake → queue → opponent matches → **pot = 2 × stake**,
+  **1% rake** to the house → **winner credited net, loser debited**. Both stakes
+  are escrowed at match start and settled (or refunded) at the end. The match-over
+  screen shows your net DEMO change.
+- **Server-authoritative balances**: clients only send intents (login / queue /
+  deposit / withdraw); the server owns every balance via a `Bank` module.
+- **Visible treasury** accumulating the rake (and demo fees), shown in the lobby.
+- **Demo deposit/withdraw** with their own fee (to the treasury), purely to
+  visualise funding/cash-out — these deliberately mint/burn DEMO credits.
+- **Append-only ledger + reconciliation**: every balance move is logged; the sum
+  of ledger deltas always equals the sum of all balances. Unit-tested for match
+  conservation (nothing created/destroyed except the rake) and reconciliation;
+  the integration test drives a full staked match and checks the play-money moves.
+
+### Done (M5 — devnet token cosmetics, optional & non-wagering)
+
+> **Devnet-only, read-only, cosmetic, off by default.** No signing, transfers,
+> staking, wagering, real value, or mainnet — devnet tokens are worthless test
+> tokens. Nothing in the match or economy depends on this.
+
+- **Cosmetic skins** (accent-colour themes) — a shared, unit-tested unlock model
+  (`unlockedSkins(balance)`); free skins always available, others gated by a
+  devnet token balance. Selection persists in localStorage and recolours the HUD.
+- **Isolated, feature-flagged token module** (`client/src/token.ts`): with
+  `VITE_TOKEN=1` the lobby shows a wallet section that does a **read-only**
+  devnet balance lookup (public JSON-RPC, no library/keys; Phantom public key or
+  a pasted address) and unlocks the matching skins. Flag off → the module is
+  never wired in and only free skins show.
+- Configure via build env: `VITE_TOKEN=1`, `VITE_TOKEN_MINT=<devnet SPL mint>`,
+  optional `VITE_SOLANA_RPC`.
+
+### Done (M6 — Hardening)
+
+- **Lag compensation ("favor the shooter")**: the server keeps ~1s of each
+  player's position history and resolves a shot against where the target was at
+  the shooter's view time (`now − rtt/2 − interpolation`, clamped). RTT is
+  **server-measured** via ping/pong (not client-trusted). Unit-tested: a rewound
+  shot lands where a high-latency shooter aimed, while the present position
+  misses.
+- **Reconnection grace**: a dropped player pauses the match for a grace window
+  and can rebind (same account) to resume; otherwise it forfeits. Integration-
+  tested (no immediate forfeit; resume on reconnect; forfeit after grace).
+- **Anti-cheat sanity checks** (server-authoritative): a per-tick simulated-
+  movement budget bounds input-flooding, view pitch is clamped/validated, and
+  fire-rate / ammo / reload / `dt` are already enforced. Integration-tested
+  (flooded inputs move a bounded distance; impossible pitch is clamped).
+  **These reject impossible _inputs_; they do NOT and cannot stop aimbots** — a
+  bot that aims perfectly sends legal inputs. (Noted in `room.ts`.)
+- **Structured logging**: one JSON object per line (level/time/event/fields).
+- **Deployable build**: multi-stage `Dockerfile` (+ `.dockerignore`) ships the
+  bundled server, the built client, and prod deps; the Node server serves both
+  on one port. See *Deploy* below.
+
+## Production polish (P-series)
+
+A presentation pass on top of the finished game. **Client-only** — it never
+touches authority; an automated guardrail test asserts `shared/` and `server/`
+import no rendering/DOM code, so visuals can't change a hitbox, damage, or
+outcome.
+
+### Done (P0 — Rendering foundation)
+
+- **Color management**: linear workflow, sRGB output, **ACES filmic** tone
+  mapping (via the post stack).
+- **PBR + image-based lighting**: metalness/roughness materials lit by a
+  procedural `RoomEnvironment` (PMREM) for ambient + reflections — zero external
+  art, with `scene.environment` as the drop-in slot for a real HDRI.
+- **Light rig + soft shadows**: warm key (sun) with PCF shadow maps, cool
+  hemisphere fill, neon rim, ambient lift.
+- **Post stack** (pmndrs `postprocessing` + `n8ao`): **SSAO** (ground-contact
+  ambient occlusion, high/ultra), bloom on the neon, SMAA, vignette, film grain,
+  ACES tone-map — each gated per preset.
+- **Quality presets** Low/Medium/High/Ultra (scale resolution, shadows, effects)
+  + **dynamic resolution scaling** to hold frame rate; selector in the lobby.
+- **Perf HUD** (fps / frame time / draw calls / triangles / textures) — toggle
+  with the **backtick** key.
+
+LIMITATION:
+- **Cascaded shadow maps** were implemented and then reverted: `three`'s CSM
+  assumes every directional light is one of its cascades, which conflicts with
+  the scene's neon **rim** directional light (out-of-range `CSM_cascades[]`
+  shader error) — and a tuned single shadow cascade is ample for this small
+  enclosed arena. We ship the single cascade; CSM is worth revisiting only if
+  maps grow large (and the light rig is reworked).
+- **Motion blur** is deferred: the render stack has no clean velocity-buffer
+  path, and it's a competitive-FPS anti-feature (the base spec itself lists it
+  as a P6 *toggle*). Not faked.
+- Real 60fps numbers need real-GPU hardware (headless software-GL isn't
+  representative). See `ATTRIBUTION.md`.
+
+## Deploy
+
+The repo builds to a single Node server that serves the client and the
+WebSocket game on one port, with SQLite for the play-money economy.
+
+### One-click (Render) — get a public URL, no terminal
+
+A Render Blueprint (`render.yaml` at the repo root) is included. Click:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/lukiegregory171-art/Luke/tree/claude/zealous-cannon-4jsywq)
+
+Sign in to Render (free), approve the blueprint, and it builds from the
+`Dockerfile` and gives you a public `https://…onrender.com` URL — open it, sign
+in with a handle, and play (FIND MATCH from two tabs, or PRACTICE). WebSockets
+work over the same URL. On Render's **free** tier the filesystem is ephemeral,
+so the demo accounts reset on restart and the instance sleeps when idle (first
+hit after sleeping takes a few seconds to wake); for persistence, use a paid
+instance with a disk at `/data` and set `LIQUIDATE_DB=/data/liquidate.sqlite`.
+
+Railway and Fly.io also work — both detect the `Dockerfile` (set the root/build
+context to `liquidate/`).
+
+### Docker
+
+```bash
+# From liquidate/ — build the image and run it
+docker build -t liquidate .
+docker run -p 8080:8080 -v liquidate-data:/data liquidate
+# open http://localhost:8080
+```
+
+- **Env**: `PORT` (default 8080), `LIQUIDATE_DB` (default `/data/liquidate.sqlite`
+  in the image — mount a volume to persist accounts), `TARGET_KILLS`,
+  `RESPAWN_DELAY`, `RECONNECT_GRACE_MS`, `MAP` (force a map; otherwise random).
+- **Without Docker**: `npm ci && npm run build`, then
+  `LIQUIDATE_DB=./data.sqlite node server/dist/index.js` (serves `client/dist`).
+- The optional M5 devnet token is a **client build-time** flag (`VITE_TOKEN=1`,
+  `VITE_TOKEN_MINT=…`) and is independent of the server.
+
+> Still play-money only. Deploying this does not make it a real-money product;
+> real-money wagering/custody is a licensed-operator activity and is out of
+> scope by design.
+
+## Note on repo location
+
+This project lives in the `liquidate/` subdirectory of a larger personal repo so
+it does not collide with the unrelated app at the repo root. All commands above
+are run from inside `liquidate/`.
