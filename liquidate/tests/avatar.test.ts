@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { hurtboxes } from '@liquidate/shared';
 import { createAvatar } from '../client/src/avatar';
 import { Character } from '../client/src/character';
+import { Opponent } from '../client/src/opponent';
 
 describe('avatar factory', () => {
   it('falls back to the procedural figure when no rig asset is loaded', () => {
@@ -21,6 +22,45 @@ describe('avatar factory', () => {
       expect(typeof (a as unknown as Record<string, unknown>)[m]).toBe('function');
     }
     a.dispose();
+  });
+});
+
+describe('avatar renders at a valid, visible position', () => {
+  it('a placed avatar is visible and sits exactly at the given feet position', () => {
+    const scene = new THREE.Scene();
+    const a = createAvatar(scene, { body: 0x0e1719, team: 0xff4d4d });
+    a.setAlive(true);
+    a.place(4, 0, -3, 0.5);
+    a.update(0.016, 0);
+
+    expect(a.root.visible).toBe(true);
+    expect(a.root.position.x).toBeCloseTo(4);
+    expect(a.root.position.y).toBeCloseTo(0);
+    expect(a.root.position.z).toBeCloseTo(-3);
+    for (const c of [a.root.position.x, a.root.position.y, a.root.position.z]) {
+      expect(Number.isFinite(c)).toBe(true);
+    }
+    a.dispose();
+  });
+
+  it('an opponent driven by snapshots ends up at the broadcast position (in scene)', () => {
+    const scene = new THREE.Scene();
+    const opp = new Opponent(scene);
+    // Two snapshots bracketing the render time → interpolates onto (5, 0, 2).
+    opp.pushFrame(1000, 5, 0, 2, 0, true);
+    opp.pushFrame(1100, 5, 0, 2, 0, true);
+    opp.update(1100, 0.016);
+
+    // The avatar (or its debug marker) must be somewhere in the scene graph at a
+    // finite, in-arena position — not lost at the origin/NaN or detached.
+    let found = false;
+    scene.traverse((o) => {
+      if (o === scene) return;
+      const p = o.position;
+      if (Math.abs(p.x - 5) < 0.01 && Math.abs(p.z - 2) < 0.01) found = true;
+    });
+    expect(found).toBe(true);
+    opp.dispose();
   });
 });
 

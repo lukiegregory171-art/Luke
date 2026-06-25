@@ -23,6 +23,7 @@ import {
 } from '@liquidate/shared';
 import { createAvatar, type Avatar } from './avatar';
 import { COLORS } from './palette';
+import { DEBUG_BOTS, makeBotMarker } from './debug';
 
 const TURN_RATE = 5.5; // rad/s aim slew
 const DESIRED_RANGE = 11; // metres the bot tries to hold
@@ -46,6 +47,7 @@ export class Bot {
   passive = false;
 
   private readonly character: Avatar;
+  private readonly marker?: THREE.Mesh; // TEMP debug marker (see debug.ts)
   private ammo = ASSAULT.magazine;
   private fireCd = 0;
   private reloadTimer = 0;
@@ -56,6 +58,10 @@ export class Bot {
     this.move = makeMoveState(spawn);
     // Red-visor team tint to distinguish the bot from a networked opponent.
     this.character = createAvatar(scene, { body: 0x0e1719, team: COLORS.red });
+    if (DEBUG_BOTS) {
+      this.marker = makeBotMarker();
+      scene.add(this.marker);
+    }
     this.renderAvatar(0); // place + show upright at spawn
   }
 
@@ -180,6 +186,10 @@ export class Bot {
     this.character.setAirborne?.(this.move.pos.y > 0.25);
     this.character.setReloading?.(this.reloadTimer > 0);
     this.character.update(dt, speed);
+    if (this.marker) {
+      this.marker.position.set(this.move.pos.x, this.move.pos.y + 0.9, this.move.pos.z);
+      this.marker.visible = this.alive;
+    }
   }
 }
 

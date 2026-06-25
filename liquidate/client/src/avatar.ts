@@ -33,6 +33,14 @@ export interface Avatar {
 
 /** Rigged glTF avatar when its asset is loaded; procedural figure otherwise. */
 export function createAvatar(scene: THREE.Scene, colors: CharacterColors): Avatar {
-  if (hasAvatarSource()) return new RiggedCharacter(scene, colors);
+  if (hasAvatarSource()) {
+    try {
+      return new RiggedCharacter(scene, colors);
+    } catch (err) {
+      // Never let a rig problem leave a player invisible — fall back to the
+      // procedural figure (and surface the cause).
+      console.error('[avatar] rigged avatar failed; using procedural figure', err);
+    }
+  }
   return new Character(scene, colors);
 }

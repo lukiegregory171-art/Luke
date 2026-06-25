@@ -19,6 +19,7 @@ import { PLAYER_HEIGHT, weaponSkinById, type WeaponId, type WeaponSkin } from '@
 import { getAvatarSource } from './avatarsource';
 import { buildWeaponModel, type WeaponModel } from './weaponmodel';
 import type { CharacterColors } from './character';
+import { DEBUG_BOTS } from './debug';
 
 const CLIP = {
   idle: 'Idle',
@@ -82,18 +83,38 @@ export class RiggedCharacter {
     });
 
     // Normalise to player height, feet on the ground, facing -Z at yaw 0.
+    this.model.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(this.model);
     const size = new THREE.Vector3();
     box.getSize(size);
-    this.rigScale = PLAYER_HEIGHT / (size.y || 1);
+    // Guard a degenerate bounding box (would otherwise scale the model to ~0 or
+    // a NaN, leaving an invisible/garbage avatar).
+    let scale = PLAYER_HEIGHT / (size.y || 1);
+    if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+    this.rigScale = THREE.MathUtils.clamp(scale, 0.05, 50);
+    const minY = Number.isFinite(box.min.y) ? box.min.y : 0;
     const rig = new THREE.Group();
     rig.add(this.model);
     rig.scale.setScalar(this.rigScale);
-    rig.position.y = -box.min.y * this.rigScale;
+    rig.position.y = -minY * this.rigScale;
     rig.rotation.y = MODEL_FACING;
     this.root.add(rig);
     this.root.visible = false;
     scene.add(this.root);
+
+    if (DEBUG_BOTS) {
+      let meshes = 0;
+      this.model.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) meshes++;
+      });
+      console.warn('[avatar] rig built', {
+        rigScale: +this.rigScale.toFixed(3),
+        size: [+size.x.toFixed(2), +size.y.toFixed(2), +size.z.toFixed(2)],
+        minY: +minY.toFixed(2),
+        meshes,
+        clips: src.clips.length,
+      });
+    }
 
     // Right-hand bone socket for the held weapon.
     const hand = this.model.getObjectByName('Hand.R') ?? this.model.getObjectByName('Hand.L');

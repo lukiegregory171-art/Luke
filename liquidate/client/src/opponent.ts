@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { DEFAULT_WEAPON, type WeaponId } from '@liquidate/shared';
 import { createAvatar, type Avatar } from './avatar';
 import { COLORS } from './palette';
+import { DEBUG_BOTS, makeBotMarker } from './debug';
 
 interface Frame {
   t: number; // server time (ms)
@@ -33,9 +34,16 @@ export class Opponent {
   private appliedWeapon?: WeaponId;
   private appliedSkin?: string;
 
-  constructor(scene: THREE.Scene) {
+  // TEMP debug marker (see debug.ts) — bright box at the authoritative position.
+  private readonly marker?: THREE.Mesh;
+
+  constructor(private readonly scene: THREE.Scene) {
     // Enemy: dark visor, RED team body (locked readability).
     this.character = createAvatar(scene, { body: 0x0e1719, team: COLORS.red });
+    if (DEBUG_BOTS) {
+      this.marker = makeBotMarker();
+      scene.add(this.marker);
+    }
   }
 
   /** One-shot shoot animation (driven by the opponent's fire events). */
@@ -47,6 +55,7 @@ export class Opponent {
   reset(): void {
     this.buffer.length = 0;
     this.character.reset();
+    if (this.marker) this.marker.visible = false;
   }
 
   /** Team tint (ally vs enemy in TDM). */
@@ -57,6 +66,11 @@ export class Opponent {
   /** Free GPU resources + remove from the scene (when this player leaves). */
   dispose(): void {
     this.character.dispose();
+    if (this.marker) {
+      this.scene.remove(this.marker);
+      this.marker.geometry.dispose();
+      (this.marker.material as THREE.Material).dispose();
+    }
   }
 
   /** Latest known feet position (for impacts / damage indicators). */
@@ -88,6 +102,7 @@ export class Opponent {
     if (this.buffer.length === 0) {
       this.character.setAlive(false);
       this.character.update(dt, 0);
+      if (this.marker) this.marker.visible = false;
       return;
     }
 
@@ -118,6 +133,12 @@ export class Opponent {
     this.character.setAirborne?.(y > 0.25); // feet above the floor → jumping
     this.character.setReloading?.(this.reloading);
     this.character.update(dt, speed);
+
+    // TEMP debug marker at the authoritative feet position (+ torso height).
+    if (this.marker) {
+      this.marker.position.set(x, y + 0.9, z);
+      this.marker.visible = newer.alive;
+    }
 
     // Apply the broadcast weapon + cosmetic skin when it changes (cheap; the
     // model only rebuilds on a weapon switch).
