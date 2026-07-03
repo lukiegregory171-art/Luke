@@ -1,0 +1,14 @@
+{
+  "name": "rivals-fps",
+  "version": "1.0.0",
+  "description": "Browser-based multiplayer FPS inspired by Rivals on Roblox",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "ws": "^8.18.0"
+  }
+}
